@@ -40,7 +40,7 @@ cdef extern from "float.h":
 cdef class Criterion:
     """Interface for splitting criteria (regression and classification)"""
 
-    cdef void init(self, DTYPE_t *y, BOOL_t *sample_mask, int n_samples,
+    cdef void init(self, DTYPE_t[:] y, BOOL_t *sample_mask, int n_samples,
                    int n_total_samples):
         """Initialise the criterion class for new split point."""
         pass
@@ -49,7 +49,7 @@ cdef class Criterion:
         """Reset the criterion for a new feature index."""
         pass
 
-    cdef int update(self, int a, int b, DTYPE_t *y, int *X_argsorted_i,
+    cdef int update(self, int a, int b, DTYPE_t[:] y, int *X_argsorted_i,
                     BOOL_t *sample_mask):
         """Update the criteria for each value in interval [a,b) (where a and b
            are indices in `X_argsorted_i`)."""
@@ -123,7 +123,7 @@ cdef class ClassificationCriterion(Criterion):
         self.ndarray_label_count_right = ndarray_label_count_right
         self.ndarray_label_count_init = ndarray_label_count_init
 
-    cdef void init(self, DTYPE_t *y, BOOL_t *sample_mask, int n_samples,
+    cdef void init(self, DTYPE_t[:] y, BOOL_t *sample_mask, int n_samples,
                    int n_total_samples):
         """Initialise the criterion class."""
         cdef int c = 0
@@ -153,7 +153,7 @@ cdef class ClassificationCriterion(Criterion):
             self.label_count_left[c] = 0
             self.label_count_right[c] = self.label_count_init[c]
 
-    cdef int update(self, int a, int b, DTYPE_t *y, int *X_argsorted_i,
+    cdef int update(self, int a, int b, DTYPE_t[:] y, int *X_argsorted_i,
                     BOOL_t *sample_mask):
         """Update the criteria for each value in interval [a,b) (where a and b
            are indices in `X_argsorted_i`)."""
@@ -309,7 +309,7 @@ cdef class RegressionCriterion(Criterion):
         self.var_left = 0.0
         self.var_right = 0.0
 
-    cdef void init(self, DTYPE_t *y, BOOL_t *sample_mask, int n_samples,
+    cdef void init(self, DTYPE_t[:] y, BOOL_t *sample_mask, int n_samples,
                    int n_total_samples):
         """Initialise the criterion class; assume all samples
            are in the right branch and store the mean and squared
@@ -352,7 +352,7 @@ cdef class RegressionCriterion(Criterion):
         self.var_right = self.sq_sum_right - \
             self.n_samples * (self.mean_right * self.mean_right)
 
-    cdef int update(self, int a, int b, DTYPE_t *y, int *X_argsorted_i,
+    cdef int update(self, int a, int b, DTYPE_t[:] y, int *X_argsorted_i,
                     BOOL_t *sample_mask):
         """Update the criteria for each value in interval [a,b) (where a and b
            are indices in `X_argsorted_i`)."""
@@ -489,9 +489,8 @@ def _error_at_leaf(np.ndarray[DTYPE_t, ndim=1, mode="c"] y,
     """Compute criterion error at leaf with terminal region defined
     by `sample_mask`. """
     cdef int n_total_samples = y.shape[0]
-    cdef DTYPE_t *y_ptr = <DTYPE_t *>y.data
     cdef BOOL_t *sample_mask_ptr = <BOOL_t *>sample_mask.data
-    criterion.init(y_ptr, sample_mask_ptr, n_samples, n_total_samples)
+    criterion.init(y, sample_mask_ptr, n_samples, n_total_samples)
     return criterion.eval()
 
 
@@ -596,7 +595,6 @@ def _find_best_split(np.ndarray[DTYPE_t, ndim=2, mode="fortran"] X,
     cdef int n_left = 0
     cdef DTYPE_t t, initial_error, error
     cdef DTYPE_t best_error = np.inf, best_t = np.inf
-    cdef DTYPE_t *y_ptr = <DTYPE_t *>y.data
     cdef DTYPE_t *X_i = NULL
     cdef int *X_argsorted_i = NULL
     cdef BOOL_t *sample_mask_ptr = <BOOL_t *>sample_mask.data
@@ -613,7 +611,7 @@ def _find_best_split(np.ndarray[DTYPE_t, ndim=2, mode="fortran"] X,
 
     # Compute the initial criterion value in the node
     X_argsorted_i = <int *>X_argsorted.data
-    criterion.init(y_ptr, sample_mask_ptr, n_samples, n_total_samples)
+    criterion.init(y, sample_mask_ptr, n_samples, n_total_samples)
     initial_error = criterion.eval()
 
     if initial_error == 0:  # break early if the node is pure
@@ -652,7 +650,7 @@ def _find_best_split(np.ndarray[DTYPE_t, ndim=2, mode="fortran"] X,
                 break
 
             # Better split than the best so far?
-            n_left = criterion.update(a, b, y_ptr, X_argsorted_i, sample_mask_ptr)
+            n_left = criterion.update(a, b, y, X_argsorted_i, sample_mask_ptr)
 
             # Only consider splits that respect min_leaf
             if n_left < min_leaf or (n_samples - n_left) < min_leaf:
@@ -740,7 +738,6 @@ def _find_best_random_split(np.ndarray[DTYPE_t, ndim=2, mode="fortran"] X,
     cdef np.int32_t feature_idx = -1
     cdef DTYPE_t t, initial_error, error
     cdef DTYPE_t best_error = np.inf, best_t = np.inf
-    cdef DTYPE_t *y_ptr = <DTYPE_t *>y.data
     cdef DTYPE_t *X_i = NULL
     cdef int *X_argsorted_i = NULL
     cdef BOOL_t *sample_mask_ptr = <BOOL_t *>sample_mask.data
@@ -757,7 +754,7 @@ def _find_best_random_split(np.ndarray[DTYPE_t, ndim=2, mode="fortran"] X,
 
     # Compute the initial criterion value
     X_argsorted_i = <int *>X_argsorted.data
-    criterion.init(y_ptr, sample_mask_ptr, n_samples, n_total_samples)
+    criterion.init(y, sample_mask_ptr, n_samples, n_total_samples)
     initial_error = criterion.eval()
 
     if initial_error == 0:  # break early if the node is pure
@@ -811,7 +808,7 @@ def _find_best_random_split(np.ndarray[DTYPE_t, ndim=2, mode="fortran"] X,
             c += 1
 
         # Better than the best so far?
-        n_left = criterion.update(0, c, y_ptr, X_argsorted_i, sample_mask_ptr)
+        n_left = criterion.update(0, c, y, X_argsorted_i, sample_mask_ptr)
         error = criterion.eval()
 
         if n_left < min_leaf or (n_samples - n_left) < min_leaf:

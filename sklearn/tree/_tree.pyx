@@ -437,11 +437,16 @@ cdef class MSE(RegressionCriterion):
     """
 
     cdef double eval(self):
-        cdef double result = 0.0
+        cdef double result_left = 0.0
+        cdef double result_right = 0.0
         for y1 in range(self.y1):
             for y2 in range(self.y2):
                 for y3 in range(self.y3):
-                    result += self.var_left[y1, y2, y3] + self.var_right[y1, y2, y3]
+                    result_left += self.var_left[y1, y2, y3]
+                    result_right += self.var_right[y1, y2, y3]
+        result_left *= (1 / <double>(self.n_left))
+        result_right *= (1 / <double>(self.n_right))
+        return result_left + result_right
 
 
 ################################################################################

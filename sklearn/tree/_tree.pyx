@@ -308,14 +308,16 @@ cdef class RegressionCriterion(Criterion):
         self.y1 = 0
         self.y2 = 0
         self.y3 = 0
-        self.mean_left = np.zeros((1,1,1), dtype=DTYPE)
-        self.mean_right = np.zeros((1,1,1), dtype=DTYPE)
-        self.mean_init = np.zeros((1,1,1), dtype=DTYPE)
-        self.sq_sum_right = np.zeros((1,1,1), dtype=DTYPE)
-        self.sq_sum_left = np.zeros((1,1,1), dtype=DTYPE)
-        self.sq_sum_init = np.zeros((1,1,1), dtype=DTYPE)
-        self.var_left = np.zeros((1,1,1), dtype=DTYPE)
-        self.var_right = np.zeros((1,1,1), dtype=DTYPE)
+
+        shape = (1, 1, 1)
+        self.mean_left = np.zeros(shape, dtype=DTYPE)
+        self.mean_right = np.zeros(shape, dtype=DTYPE)
+        self.mean_init = np.zeros(shape, dtype=DTYPE)
+        self.sq_sum_right = np.zeros(shape, dtype=DTYPE)
+        self.sq_sum_left = np.zeros(shape, dtype=DTYPE)
+        self.sq_sum_init = np.zeros(shape, dtype=DTYPE)
+        self.var_left = np.zeros(shape, dtype=DTYPE)
+        self.var_right = np.zeros(shape, dtype=DTYPE)
         self.n_samples = 0
 
 

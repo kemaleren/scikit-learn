@@ -39,12 +39,13 @@ REGRESSION = {
 RESP_DIMS = 3
 
 
-def _at_least(y, ndim=RESP_DIMS):
-    if len(y.shape) > ndim + 1:
+def _at_least(y, ndim=RESP_DIMS+1):
+    y = np.array(y)
+    if len(y.shape) > ndim:
         raise Exception('y has too many dimensions')
     new_shape = y.shape
-    if len(y.shape) < ndim + 1:
-        missing = ndim - len(y.shape) + 1
+    if len(y.shape) < ndim:
+        missing = ndim - len(y.shape)
         new_shape = y.shape + (1,) * missing
     return np.reshape(y, new_shape)
 
@@ -195,11 +196,7 @@ class Tree(object):
 
         self.threshold = np.empty((capacity,), dtype=np.float64)
 
-        if isinstance(self, ClassifierMixin):
-            shape = (capacity, n_classes) + (1,) * (RESPONSE_SHAPE - 1)
-            self.value = np.empty(shape, dtype=np.float64)
-        else:
-            self.value = np.empty((capacity,) + response_shape, dtype=np.float64)
+        self.value = np.empty((capacity,) + response_shape, dtype=np.float64)
         self.value = _at_least(self.value).copy()
 
         self.best_error = np.empty((capacity,), dtype=np.float32)
@@ -242,7 +239,8 @@ class Tree(object):
         self.init_error[node_id] = init_error
         self.best_error[node_id] = best_error
         self.n_samples[node_id] = n_samples
-        self.value[node_id] = value
+
+        self.value[node_id]= _at_least(value, RESP_DIMS)
 
         # set as left or right child of parent
         if parent > Tree.LEAF:
@@ -261,7 +259,7 @@ class Tree(object):
         if node_id >= self.children.shape[0]:
             self._resize()
 
-        self.value[node_id] = value
+        self.value[node_id] = _at_least(value, RESP_DIMS)
         self.n_samples[node_id] = n_samples
         self.init_error[node_id] = error
         self.best_error[node_id] = error
@@ -547,14 +545,10 @@ class BaseDecisionTree(BaseEstimator, SelectorMixin):
         if not (0 < max_features <= self.n_features_):
             raise ValueError("max_features must be in (0, n_features]")
 
-        # shape of responses
-        if len(y.shape) == 1:
-            response_shape = ()
-        else:
-            response_shape = y.shape[1:]
+        response_shape = self.get_response_shape(y)
 
         # y must be 4D
-        y = _at_least(y, RESP_DIMS)
+        y = _at_least(y)
 
         # Build tree
         self.tree_ = Tree(self.n_classes_, self.n_features_, response_shape=response_shape)
@@ -718,6 +712,10 @@ class DecisionTreeClassifier(BaseDecisionTree, ClassifierMixin):
                                                      compute_importances,
                                                      random_state)
 
+    def get_response_shape(self, y):
+        return (self.n_classes_,)
+
+
     def predict_proba(self, X):
         """Predict class probabilities of the input samples X.
 
@@ -878,6 +876,14 @@ class DecisionTreeRegressor(BaseDecisionTree, RegressorMixin):
                                                     max_features,
                                                     compute_importances,
                                                     random_state)
+
+    def get_response_shape(self, y):
+        if len(y.shape) == 1:
+            response_shape = ()
+        else:
+            response_shape = y.shape[1:]
+        return response_shape
+
 
 
 class ExtraTreeClassifier(DecisionTreeClassifier):

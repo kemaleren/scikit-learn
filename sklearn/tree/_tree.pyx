@@ -718,8 +718,9 @@ def _find_best_split(np.ndarray[DTYPE_t, ndim=2, mode="fortran"] X,
 
     return best_i, best_t, best_error, initial_error
 
+
 def _find_best_random_split(np.ndarray[DTYPE_t, ndim=2, mode="fortran"] X,
-                            np.ndarray[DTYPE_t, ndim=1, mode="c"] y,
+                            np.ndarray[DTYPE_t, ndim=4, mode="c"] y,
                             np.ndarray[np.int32_t, ndim=2, mode="fortran"] X_argsorted,
                             np.ndarray sample_mask,
                             int n_samples,

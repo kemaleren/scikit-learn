@@ -36,6 +36,8 @@ REGRESSION = {
     "mse": _tree.MSE,
 }
 
+RESP_DIMS = 4
+
 
 def export_graphviz(decision_tree, out_file=None, feature_names=None):
     """Export a decision tree in DOT format.
@@ -165,7 +167,9 @@ class Tree(object):
     LEAF = -1
     UNDEFINED = -2
 
-    def __init__(self, n_classes, n_features, capacity=3):
+    def __init__(self, n_classes, n_features, capacity=3, response_dims=None):
+        if response_dims is None:
+            response_dims = (1, )
         self.n_classes = n_classes
         self.n_features = n_features
 
@@ -178,7 +182,11 @@ class Tree(object):
         self.feature.fill(Tree.UNDEFINED)
 
         self.threshold = np.empty((capacity,), dtype=np.float64)
-        self.value = np.empty((capacity, n_classes), dtype=np.float64)
+
+        if isinstance(self, ClassifierMixin):
+            self.value = np.empty((capacity, n_classes), dtype=np.float64)
+        else:
+            self.value = np.empty((capacity,) + response_dims, dtype=np.float64)
 
         self.best_error = np.empty((capacity,), dtype=np.float32)
         self.init_error = np.empty((capacity,), dtype=np.float32)
@@ -195,7 +203,13 @@ class Tree(object):
         self.children.resize((capacity, 2), refcheck=False)
         self.feature.resize((capacity,), refcheck=False)
         self.threshold.resize((capacity,), refcheck=False)
-        self.value.resize((capacity, self.value.shape[1]), refcheck=False)
+
+        if len(self.value.shape) == 1:
+            vshape = (1,)
+        else:
+            vshape = self.value.shape[1:]
+        self.value.resize((capacity,) + vshape, refcheck=False)
+
         self.best_error.resize((capacity,), refcheck=False)
         self.init_error.resize((capacity,), refcheck=False)
         self.n_samples.resize((capacity,), refcheck=False)
@@ -278,6 +292,14 @@ class Tree(object):
 
             value = criterion.init_value()
 
+            shape = value.shape
+            while len(shape) > 0 and shape[-1] == 1:
+                shape = shape[:-1]
+            if shape == ():
+                shape = (1,)
+
+            value = np.reshape(value, shape)
+
             # Current node is leaf
             if feature == -1:
                 self._add_leaf(parent, is_left_child, value,
@@ -346,7 +368,12 @@ class Tree(object):
         return self
 
     def predict(self, X):
-        out = np.empty((X.shape[0], self.value.shape[1]), dtype=np.float64)
+        if len(self.value.shape) == 1:
+            vshape = (1,)
+        else:
+            vshape = self.value.shape[1:]
+
+        out = np.empty((X.shape[0],) + self.value.shape[1:], dtype=np.float64)
 
         _tree._predict_tree(X,
                             self.children,
@@ -445,7 +472,7 @@ class BaseDecisionTree(BaseEstimator, SelectorMixin):
         X : array-like of shape = [n_samples, n_features]
             The training input samples.
 
-        y : array-like, shape = [n_samples]
+        y : array-like, shape = [n_samples] up to [n_samples, :, :, :]
             The target values (integers that correspond to classes in
             classification, real numbers in regression).
 
@@ -519,8 +546,23 @@ class BaseDecisionTree(BaseEstimator, SelectorMixin):
         if not (0 < max_features <= self.n_features_):
             raise ValueError("max_features must be in (0, n_features]")
 
+        # shape of responses
+        if len(y.shape) == 1:
+            response_dims = (1, )
+        else:
+            response_dims = y.shape[1:]
+
+        # y must be 4D
+        if len(y.shape) > RESP_DIMS:
+            raise Exception('y has too many dimensions')
+        if len(y.shape) < RESP_DIMS:
+            missing = RESP_DIMS - len(y.shape)
+            new_shape = y.shape + (1,) * missing
+            y = np.reshape(y, new_shape)
+
+
         # Build tree
-        self.tree_ = Tree(self.n_classes_, self.n_features_)
+        self.tree_ = Tree(self.n_classes_, self.n_features_, response_dims=response_dims)
         self.tree_.build(X, y, criterion, max_depth,
                 self.min_samples_split, self.min_samples_leaf,
                 self.min_density, max_features, self.random_state,
@@ -566,7 +608,7 @@ class BaseDecisionTree(BaseEstimator, SelectorMixin):
             predictions = self.classes_.take(np.argmax(
                 self.tree_.predict(X), axis=1), axis=0)
         else:
-            predictions = self.tree_.predict(X).ravel()
+            predictions = self.tree_.predict(X)
 
         return predictions
 

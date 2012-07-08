@@ -40,7 +40,7 @@ cdef extern from "float.h":
 cdef class Criterion:
     """Interface for splitting criteria (regression and classification)"""
 
-    cdef void init(self, DTYPE_t[:] y, BOOL_t *sample_mask, int n_samples,
+    cdef void init(self, DTYPE_t[:,:,:,:] y, BOOL_t *sample_mask, int n_samples,
                    int n_total_samples):
         """Initialise the criterion class for new split point."""
         pass
@@ -49,7 +49,7 @@ cdef class Criterion:
         """Reset the criterion for a new feature index."""
         pass
 
-    cdef int update(self, int a, int b, DTYPE_t[:] y, int *X_argsorted_i,
+    cdef int update(self, int a, int b, DTYPE_t[:,:,:,:] y, int *X_argsorted_i,
                     BOOL_t *sample_mask):
         """Update the criteria for each value in interval [a,b) (where a and b
            are indices in `X_argsorted_i`)."""
@@ -123,7 +123,7 @@ cdef class ClassificationCriterion(Criterion):
         self.ndarray_label_count_right = ndarray_label_count_right
         self.ndarray_label_count_init = ndarray_label_count_init
 
-    cdef void init(self, DTYPE_t[:] y, BOOL_t *sample_mask, int n_samples,
+    cdef void init(self, DTYPE_t[:,:,:,:] y, BOOL_t *sample_mask, int n_samples,
                    int n_total_samples):
         """Initialise the criterion class."""
         cdef int c = 0
@@ -137,7 +137,7 @@ cdef class ClassificationCriterion(Criterion):
         for j from 0 <= j < n_total_samples:
             if sample_mask[j] == 0:
                 continue
-            c = <int>(y[j])
+            c = <int>(y[j,0,0,0])
             self.label_count_init[c] += 1
 
         self.reset()
@@ -153,7 +153,7 @@ cdef class ClassificationCriterion(Criterion):
             self.label_count_left[c] = 0
             self.label_count_right[c] = self.label_count_init[c]
 
-    cdef int update(self, int a, int b, DTYPE_t[:] y, int *X_argsorted_i,
+    cdef int update(self, int a, int b, DTYPE_t[:,:,:,:] y, int *X_argsorted_i,
                     BOOL_t *sample_mask):
         """Update the criteria for each value in interval [a,b) (where a and b
            are indices in `X_argsorted_i`)."""
@@ -163,7 +163,7 @@ cdef class ClassificationCriterion(Criterion):
             s = X_argsorted_i[idx]
             if sample_mask[s] == 0:
                 continue
-            c = <int>(y[s])
+            c = <int>(y[s,0,0,0])
             self.label_count_right[c] -= 1
             self.label_count_left[c] += 1
             self.n_right -= 1
@@ -285,53 +285,82 @@ cdef class RegressionCriterion(Criterion):
     cdef int n_right
     cdef int n_left
 
-    cdef double mean_left
-    cdef double mean_right
-    cdef double mean_init
+    cdef DTYPE_t[:,:,:] mean_left
+    cdef DTYPE_t[:,:,:] mean_right
+    cdef DTYPE_t[:,:,:] mean_init
 
-    cdef double sq_sum_right
-    cdef double sq_sum_left
-    cdef double sq_sum_init
+    cdef DTYPE_t[:,:,:] sq_sum_right
+    cdef DTYPE_t[:,:,:] sq_sum_left
+    cdef DTYPE_t[:,:,:] sq_sum_init
 
-    cdef double var_left
-    cdef double var_right
+    cdef DTYPE_t[:,:,:] var_left
+    cdef DTYPE_t[:,:,:] var_right
+
+    cdef int y1
+    cdef int y2
+    cdef int y3
 
     def __init__(self):
         self.n_samples = 0
         self.n_left = 0
         self.n_right = 0
-        self.mean_left = 0.0
-        self.mean_right = 0.0
-        self.mean_init = 0.0
-        self.sq_sum_right = 0.0
-        self.sq_sum_left = 0.0
-        self.sq_sum_init = 0.0
-        self.var_left = 0.0
-        self.var_right = 0.0
 
-    cdef void init(self, DTYPE_t[:] y, BOOL_t *sample_mask, int n_samples,
+        self.y1 = 0
+        self.y2 = 0
+        self.y3 = 0
+        self.mean_left = np.zeros((1,1,1), dtype=DTYPE)
+        self.mean_right = np.zeros((1,1,1), dtype=DTYPE)
+        self.mean_init = np.zeros((1,1,1), dtype=DTYPE)
+        self.sq_sum_right = np.zeros((1,1,1), dtype=DTYPE)
+        self.sq_sum_left = np.zeros((1,1,1), dtype=DTYPE)
+        self.sq_sum_init = np.zeros((1,1,1), dtype=DTYPE)
+        self.var_left = np.zeros((1,1,1), dtype=DTYPE)
+        self.var_right = np.zeros((1,1,1), dtype=DTYPE)
+        self.n_samples = 0
+
+
+    cdef void init(self, DTYPE_t[:,:,:,:] y, BOOL_t *sample_mask, int n_samples,
                    int n_total_samples):
         """Initialise the criterion class; assume all samples
            are in the right branch and store the mean and squared
            sum in `self.mean_init` and `self.sq_sum_init`. """
-        self.mean_left = 0.0
-        self.mean_right = 0.0
-        self.mean_init = 0.0
-        self.sq_sum_right = 0.0
-        self.sq_sum_left = 0.0
-        self.sq_sum_init = 0.0
-        self.var_left = 0.0
-        self.var_right = 0.0
+        shape = (y.shape[1], y.shape[2], y.shape[3])
+        self.y1 = y.shape[1]
+        self.y2 = y.shape[2]
+        self.y3 = y.shape[3]
+        self.mean_left = np.zeros(shape, dtype=DTYPE)
+        self.mean_right = np.zeros(shape, dtype=DTYPE)
+        self.mean_init = np.zeros(shape, dtype=DTYPE)
+        self.sq_sum_right = np.zeros(shape, dtype=DTYPE)
+        self.sq_sum_left = np.zeros(shape, dtype=DTYPE)
+        self.sq_sum_init = np.zeros(shape, dtype=DTYPE)
+        self.var_left = np.zeros(shape, dtype=DTYPE)
+        self.var_right = np.zeros(shape, dtype=DTYPE)
         self.n_samples = n_samples
+
+        self.mean_left[:,:,:] = 0.0
+        self.mean_right[:,:,:] = 0.0
+        self.mean_init[:,:,:] = 0.0
+        self.sq_sum_right[:,:,:] = 0.0
+        self.sq_sum_left[:,:,:] = 0.0
+        self.sq_sum_init[:,:,:] = 0.0
+        self.var_left[:,:,:] = 0.0
+        self.var_right[:,:,:] = 0.0
 
         cdef int j = 0
         for j from 0 <= j < n_total_samples:
             if sample_mask[j] == 0:
                 continue
-            self.sq_sum_init += (y[j] * y[j])
-            self.mean_init += y[j]
+            for y1 in range(y.shape[1]):
+                for y2 in range(y.shape[2]):
+                    for y3 in range(y.shape[3]):
+                        self.sq_sum_init[y1, y2, y3] += (y[j, y1, y2, y3] * y[j, y1, y2, y3])
+                        self.mean_init[y1, y2, y3] += y[j, y1, y2, y3]
 
-        self.mean_init = self.mean_init / self.n_samples
+        for y1 in range(y.shape[1]):
+            for y2 in range(y.shape[2]):
+                for y3 in range(y.shape[3]):
+                    self.mean_init[y1, y2, y3] = self.mean_init[y1, y2, y3] / self.n_samples
 
         self.reset()
 
@@ -344,18 +373,24 @@ cdef class RegressionCriterion(Criterion):
         """
         self.n_right = self.n_samples
         self.n_left = 0
-        self.mean_right = self.mean_init
-        self.mean_left = 0.0
-        self.sq_sum_right = self.sq_sum_init
-        self.sq_sum_left = 0.0
-        self.var_left = 0.0
-        self.var_right = self.sq_sum_right - \
-            self.n_samples * (self.mean_right * self.mean_right)
+        self.mean_right = self.mean_init.copy()
+        self.mean_left[:,:,:] = 0.0
+        self.sq_sum_right = self.sq_sum_init.copy()
+        self.sq_sum_left[:,:,:] = 0.0
+        self.var_left[:,:,:] = 0.0
 
-    cdef int update(self, int a, int b, DTYPE_t[:] y, int *X_argsorted_i,
+        for y1 in range(self.y1):
+            for y2 in range(self.y2):
+                for y3 in range(self.y3):
+                    self.var_right[y1, y2, y3] = self.sq_sum_right[y1, y2, y3] - \
+                        self.n_samples * (self.mean_right[y1, y2, y3] * self.mean_right[y1, y2, y3])
+
+
+    cdef int update(self, int a, int b, DTYPE_t[:,:,:,:] y, int *X_argsorted_i,
                     BOOL_t *sample_mask):
         """Update the criteria for each value in interval [a,b) (where a and b
            are indices in `X_argsorted_i`)."""
+        shape = (y.shape[1], y.shape[2], y.shape[3])
         cdef double y_idx = 0.0
         cdef int idx, j
         # post condition: all samples from [0:b) are on the left side
@@ -363,23 +398,27 @@ cdef class RegressionCriterion(Criterion):
             j = X_argsorted_i[idx]
             if sample_mask[j] == 0:
                 continue
-            y_idx = y[j]
-            self.sq_sum_left = self.sq_sum_left + (y_idx * y_idx)
-            self.sq_sum_right = self.sq_sum_right - (y_idx * y_idx)
 
-            self.mean_left = (self.n_left * self.mean_left + y_idx) / \
-                <double>(self.n_left + 1)
-            self.mean_right = ((self.n_samples - self.n_left) * \
-                self.mean_right - y_idx) / \
-                <double>(self.n_samples - self.n_left - 1)
+            for y1 in range(y.shape[1]):
+                for y2 in range(y.shape[2]):
+                    for y3 in range(y.shape[3]):
+                        y_idx = y[j, y1, y2, y3]
+                        self.sq_sum_left[y1, y2, y3] = self.sq_sum_left[y1, y2, y3] + (y_idx * y_idx)
+                        self.sq_sum_right[y1, y2, y3] = self.sq_sum_right[y1, y2, y3] - (y_idx * y_idx)
 
-            self.n_right -= 1
-            self.n_left += 1
+                        self.mean_left[y1, y2, y3] = (self.n_left * self.mean_left[y1, y2, y3] + y_idx) / \
+                            <double>(self.n_left + 1)
+                        self.mean_right[y1, y2, y3] = ((self.n_samples - self.n_left) * \
+                            self.mean_right[y1, y2, y3] - y_idx) / \
+                            <double>(self.n_samples - self.n_left - 1)
 
-            self.var_left = self.sq_sum_left - \
-                self.n_left * (self.mean_left * self.mean_left)
-            self.var_right = self.sq_sum_right - \
-                self.n_right * (self.mean_right * self.mean_right)
+                        self.n_right -= 1
+                        self.n_left += 1
+
+                        self.var_left[y1, y2, y3] = self.sq_sum_left[y1, y2, y3] - \
+                            self.n_left * (self.mean_left[y1, y2, y3] * self.mean_left[y1, y2, y3])
+                        self.var_right[y1, y2, y3] = self.sq_sum_right[y1, y2, y3] - \
+                            self.n_right * (self.mean_right[y1, y2, y3] * self.mean_right[y1, y2, y3])
 
         return self.n_left
 
@@ -398,7 +437,11 @@ cdef class MSE(RegressionCriterion):
     """
 
     cdef double eval(self):
-        return self.var_left + self.var_right
+        cdef double result = 0.0
+        for y1 in range(self.y1):
+            for y2 in range(self.y2):
+                for y3 in range(self.y3):
+                    result += self.var_left[y1, y2, y3] + self.var_right[y1, y2, y3]
 
 
 ################################################################################
@@ -483,7 +526,7 @@ def _predict_tree(np.ndarray[DTYPE_t, ndim=2] X,
             pred[i, k] = values[node_id, k]
 
 
-def _error_at_leaf(np.ndarray[DTYPE_t, ndim=1, mode="c"] y,
+def _error_at_leaf(np.ndarray[DTYPE_t, ndim=4, mode="c"] y,
                    np.ndarray sample_mask, Criterion criterion,
                    int n_samples):
     """Compute criterion error at leaf with terminal region defined
@@ -530,7 +573,7 @@ cdef int smallest_sample_larger_than(int sample_idx, DTYPE_t *X_i,
 
 
 def _find_best_split(np.ndarray[DTYPE_t, ndim=2, mode="fortran"] X,
-                     np.ndarray[DTYPE_t, ndim=1, mode="c"] y,
+                     np.ndarray[DTYPE_t, ndim=4, mode="c"] y,
                      np.ndarray[np.int32_t, ndim=2, mode="fortran"] X_argsorted,
                      np.ndarray sample_mask,
                      int n_samples,

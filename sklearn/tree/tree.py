@@ -36,7 +36,17 @@ REGRESSION = {
     "mse": _tree.MSE,
 }
 
-RESP_DIMS = 4
+RESP_DIMS = 3
+
+
+def _at_least(y, ndim=RESP_DIMS):
+    if len(y.shape) > ndim + 1:
+        raise Exception('y has too many dimensions')
+    new_shape = y.shape
+    if len(y.shape) < ndim + 1:
+        missing = ndim - len(y.shape) + 1
+        new_shape = y.shape + (1,) * missing
+    return np.reshape(y, new_shape)
 
 
 def export_graphviz(decision_tree, out_file=None, feature_names=None):
@@ -167,9 +177,11 @@ class Tree(object):
     LEAF = -1
     UNDEFINED = -2
 
-    def __init__(self, n_classes, n_features, capacity=3, response_dims=None):
-        if response_dims is None:
-            response_dims = (1, )
+    def __init__(self, n_classes, n_features, capacity=3, response_shape=None):
+        if response_shape is None:
+            response_shape = ()
+        self.response_shape = response_shape
+
         self.n_classes = n_classes
         self.n_features = n_features
 
@@ -184,9 +196,11 @@ class Tree(object):
         self.threshold = np.empty((capacity,), dtype=np.float64)
 
         if isinstance(self, ClassifierMixin):
-            self.value = np.empty((capacity, n_classes), dtype=np.float64)
+            shape = (capacity, n_classes) + (1,) * (RESPONSE_SHAPE - 1)
+            self.value = np.empty(shape, dtype=np.float64)
         else:
-            self.value = np.empty((capacity,) + response_dims, dtype=np.float64)
+            self.value = np.empty((capacity,) + response_shape, dtype=np.float64)
+        self.value = _at_least(self.value).copy()
 
         self.best_error = np.empty((capacity,), dtype=np.float32)
         self.init_error = np.empty((capacity,), dtype=np.float32)
@@ -204,11 +218,7 @@ class Tree(object):
         self.feature.resize((capacity,), refcheck=False)
         self.threshold.resize((capacity,), refcheck=False)
 
-        if len(self.value.shape) == 1:
-            vshape = (1,)
-        else:
-            vshape = self.value.shape[1:]
-        self.value.resize((capacity,) + vshape, refcheck=False)
+        self.value.resize((capacity,) + self.value.shape[1:], refcheck=False)
 
         self.best_error.resize((capacity,), refcheck=False)
         self.init_error.resize((capacity,), refcheck=False)
@@ -292,14 +302,6 @@ class Tree(object):
 
             value = criterion.init_value()
 
-            shape = value.shape
-            while len(shape) > 0 and shape[-1] == 1:
-                shape = shape[:-1]
-            if shape == ():
-                shape = (1,)
-
-            value = np.reshape(value, shape)
-
             # Current node is leaf
             if feature == -1:
                 self._add_leaf(parent, is_left_child, value,
@@ -368,11 +370,6 @@ class Tree(object):
         return self
 
     def predict(self, X):
-        if len(self.value.shape) == 1:
-            vshape = (1,)
-        else:
-            vshape = self.value.shape[1:]
-
         out = np.empty((X.shape[0],) + self.value.shape[1:], dtype=np.float64)
 
         _tree._predict_tree(X,
@@ -381,6 +378,10 @@ class Tree(object):
                             self.threshold,
                             self.value,
                             out)
+
+        #get rid of extra dimensions, if any
+        final_shape = (out.shape[0],) + self.response_shape
+        out = out.reshape(final_shape)
 
         return out
 
@@ -548,21 +549,15 @@ class BaseDecisionTree(BaseEstimator, SelectorMixin):
 
         # shape of responses
         if len(y.shape) == 1:
-            response_dims = (1, )
+            response_shape = ()
         else:
-            response_dims = y.shape[1:]
+            response_shape = y.shape[1:]
 
         # y must be 4D
-        if len(y.shape) > RESP_DIMS:
-            raise Exception('y has too many dimensions')
-        if len(y.shape) < RESP_DIMS:
-            missing = RESP_DIMS - len(y.shape)
-            new_shape = y.shape + (1,) * missing
-            y = np.reshape(y, new_shape)
-
+        y = _at_least(y, RESP_DIMS)
 
         # Build tree
-        self.tree_ = Tree(self.n_classes_, self.n_features_, response_dims=response_dims)
+        self.tree_ = Tree(self.n_classes_, self.n_features_, response_shape=response_shape)
         self.tree_.build(X, y, criterion, max_depth,
                 self.min_samples_split, self.min_samples_leaf,
                 self.min_density, max_features, self.random_state,

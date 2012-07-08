@@ -507,8 +507,8 @@ def _predict_tree(np.ndarray[DTYPE_t, ndim=2] X,
                   np.ndarray[np.int32_t, ndim=2] children,
                   np.ndarray[np.int32_t, ndim=1] feature,
                   np.ndarray[np.float64_t, ndim=1] threshold,
-                  np.ndarray[np.float64_t, ndim=2] values,
-                  np.ndarray[np.float64_t, ndim=2] pred):
+                  np.float64_t[:,:,:,:] values,
+                  np.float64_t[:,:,:,:] pred):
     """Finds the terminal region (=leaf node) values for each sample. """
     cdef int i = 0
     cdef int n = X.shape[0]
@@ -522,8 +522,10 @@ def _predict_tree(np.ndarray[DTYPE_t, ndim=2] X,
                 node_id = children[node_id, 0]
             else:
                 node_id = children[node_id, 1]
-        for k in xrange(K):
-            pred[i, k] = values[node_id, k]
+        for y1 in range(values.shape[1]):
+            for y2 in range(values.shape[2]):
+                for y3 in range(values.shape[3]):
+                    pred[i, y1, y2, y3] = values[node_id, y1, y2, y3]
 
 
 def _error_at_leaf(np.ndarray[DTYPE_t, ndim=4, mode="c"] y,

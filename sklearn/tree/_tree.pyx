@@ -340,14 +340,14 @@ cdef class RegressionCriterion(Criterion):
         self.var_right = np.zeros(shape, dtype=DTYPE)
         self.n_samples = n_samples
 
-        self.mean_left[:,:,:] = 0.0
-        self.mean_right[:,:,:] = 0.0
-        self.mean_init[:,:,:] = 0.0
-        self.sq_sum_right[:,:,:] = 0.0
-        self.sq_sum_left[:,:,:] = 0.0
-        self.sq_sum_init[:,:,:] = 0.0
-        self.var_left[:,:,:] = 0.0
-        self.var_right[:,:,:] = 0.0
+        self.mean_left[...] = 0.0
+        self.mean_right[...] = 0.0
+        self.mean_init[...] = 0.0
+        self.sq_sum_right[...] = 0.0
+        self.sq_sum_left[...] = 0.0
+        self.sq_sum_init[...] = 0.0
+        self.var_left[...] = 0.0
+        self.var_right[...] = 0.0
 
         cdef int j = 0
         for j from 0 <= j < n_total_samples:

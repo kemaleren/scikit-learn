@@ -308,6 +308,18 @@ cdef class RegressionCriterion(Criterion):
         self.y1 = 0
         self.y2 = 0
         self.y3 = 0
+
+        mean_left = None
+        mean_right = None
+        mean_init = None
+
+        sq_sum_right = None
+        sq_sum_left = None
+        sq_sum_init = None
+
+        var_left = None
+        var_right = None
+
         self.n_samples = 0
 
 
@@ -330,16 +342,10 @@ cdef class RegressionCriterion(Criterion):
         self.var_right = np.zeros(shape, dtype=DTYPE)
         self.n_samples = n_samples
 
-        self.mean_left[...] = 0.0
-        self.mean_right[...] = 0.0
-        self.mean_init[...] = 0.0
-        self.sq_sum_right[...] = 0.0
-        self.sq_sum_left[...] = 0.0
-        self.sq_sum_init[...] = 0.0
-        self.var_left[...] = 0.0
-        self.var_right[...] = 0.0
-
         cdef int j = 0
+        cdef int y1 = 0
+        cdef int y2 = 0
+        cdef int y3 = 0
         for j from 0 <= j < n_total_samples:
             if sample_mask[j] == 0:
                 continue
@@ -365,11 +371,11 @@ cdef class RegressionCriterion(Criterion):
         """
         self.n_right = self.n_samples
         self.n_left = 0
-        self.mean_right = self.mean_init.copy()
-        self.mean_left[:,:,:] = 0.0
-        self.sq_sum_right = self.sq_sum_init.copy()
-        self.sq_sum_left[:,:,:] = 0.0
-        self.var_left[:,:,:] = 0.0
+        self.mean_right[...] = self.mean_init
+        self.mean_left[...] = 0.0
+        self.sq_sum_right[...] = self.sq_sum_init
+        self.sq_sum_left[...] = 0.0
+        self.var_left[...] = 0.0
 
         for y1 in range(self.y1):
             for y2 in range(self.y2):
@@ -382,7 +388,6 @@ cdef class RegressionCriterion(Criterion):
                     BOOL_t *sample_mask):
         """Update the criteria for each value in interval [a,b) (where a and b
            are indices in `X_argsorted_i`)."""
-        shape = (y.shape[1], y.shape[2], y.shape[3])
         cdef double y_idx = 0.0
         cdef int idx, j
         # post condition: all samples from [0:b) are on the left side
@@ -414,12 +419,24 @@ cdef class RegressionCriterion(Criterion):
 
         return self.n_left
 
+
     cdef double eval(self):
         pass
 
+
     cpdef np.ndarray init_value(self):
         ## TODO is calling np.asarray a performance issue?
-        return np.asarray(self.mean_init)
+        shape = (self.y1, self.y2, self.y3)
+        r = np.zeros(shape, dtype=DTYPE)
+        cdef int i = 0
+        cdef int j = 0
+        cdef int k = 0
+        for i from 0 <= i < self.y1:
+            for j from 0 <= j < self.y2:
+                for k from 0 <= k < self.y3:
+                    r[i, j, k] = self.mean_init[i, j, k]
+        return r
+
 
 
 cdef class MSE(RegressionCriterion):

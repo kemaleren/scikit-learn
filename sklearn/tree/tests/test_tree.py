@@ -34,6 +34,58 @@ perm = rng.permutation(boston.target.size)
 boston.data = boston.data[perm]
 boston.target = boston.target[perm]
 
+def sse(x):
+    m = np.mean(x)
+    one = np.power(x - m, 2).sum()
+    two = (x * x).sum() - len(x) * (np.mean(x) ** 2)
+    assert_almost_equal(one, two)
+    return one
+
+
+def test_sse():
+    y = np.random.randn(20)
+    s = y.sum()
+    ss = (y * y).sum()
+    result = tree._tree.sse(s, ss, len(y))
+    exp = sse(y)
+    assert_almost_equal(exp, result)
+
+
+def test_regression_criterion():
+    y = np.random.randn(20, 1, 1, 1)
+    y = np.float64(y)
+
+    sample_mask = np.bool8(np.ones(y.shape[0]))
+    n_samples = 20
+    n_total_samples = 20
+
+    c = tree._tree.MSE()
+    tree._tree.crit_init(c, y, sample_mask, n_samples, n_total_samples)
+    mean = c.init_value()
+    assert_almost_equal(mean, np.mean(y))
+
+    def sse(x):
+        m = np.mean(x)
+        return np.power(x - m, 2).sum()
+
+    found = tree._tree._error_at_leaf(y, sample_mask, c, len(y))
+    expected = sse(y)
+    assert_almost_equal(found, expected, 2)
+
+    argsorted = np.argsort(y, axis=0).reshape((20,))
+    argsorted = np.int32(argsorted)
+
+    tree._tree.crit_update(c, 0, 10, y, argsorted, sample_mask)
+    result = tree._tree.crit_eval(c)
+
+    y = np.reshape(y, (20,))
+
+    left = np.array([y[argsorted[i]] for i in range(10)])
+    right = np.array([y[argsorted[i]] for i in range(10, 20)])
+
+    expected = sse(left) + sse(right)
+    assert_almost_equal(result, expected, 2)
+
 
 def test_classification_toy():
     """Check classification on a toy dataset."""

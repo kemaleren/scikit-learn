@@ -13,8 +13,8 @@ import numpy as np
 cimport numpy as np
 
 # Define a datatype for the data array
-DTYPE = np.float32
-ctypedef np.float32_t DTYPE_t
+DTYPE = np.float64
+ctypedef np.float64_t DTYPE_t
 ctypedef np.int8_t BOOL_t
 
 cdef extern from "math.h":
@@ -256,23 +256,15 @@ cdef class RegressionCriterion(Criterion):
     n_samples : int
         The number of samples
 
-    mean_left : double
-        The mean target value of the samples left of the split point.
+    sum_left : double
 
-    mean_right : double
-        The mean target value of the samples right of the split.
+    sum_right : double
 
     sq_sum_left : double
         The sum of squared target values left of the split point.
 
     sq_sum_right : double
         The sum of squared target values right of the split point.
-
-    var_left : double
-        The variance of the target values left of the split point.
-
-    var_right : double
-        The variance of the target values left of the split point.
 
     n_left : int
         number of samples left of split point.
@@ -285,16 +277,14 @@ cdef class RegressionCriterion(Criterion):
     cdef int n_right
     cdef int n_left
 
-    cdef DTYPE_t[:,:,:] mean_left
-    cdef DTYPE_t[:,:,:] mean_right
-    cdef DTYPE_t[:,:,:] mean_init
+    cdef DTYPE_t[:,:,:] sum_left
+    cdef DTYPE_t[:,:,:] sum_right
+
+    cdef DTYPE_t[:,:,:] sum_init
 
     cdef DTYPE_t[:,:,:] sq_sum_right
     cdef DTYPE_t[:,:,:] sq_sum_left
     cdef DTYPE_t[:,:,:] sq_sum_init
-
-    cdef DTYPE_t[:,:,:] var_left
-    cdef DTYPE_t[:,:,:] var_right
 
     cdef int y1
     cdef int y2
@@ -309,16 +299,14 @@ cdef class RegressionCriterion(Criterion):
         self.y2 = 0
         self.y3 = 0
 
-        mean_left = None
-        mean_right = None
-        mean_init = None
+        sum_left = None
+        sum_right = None
+
+        sum_init = None
 
         sq_sum_right = None
         sq_sum_left = None
         sq_sum_init = None
-
-        var_left = None
-        var_right = None
 
         self.n_samples = 0
 
@@ -332,14 +320,12 @@ cdef class RegressionCriterion(Criterion):
         self.y1 = y.shape[1]
         self.y2 = y.shape[2]
         self.y3 = y.shape[3]
-        self.mean_left = np.zeros(shape, dtype=DTYPE)
-        self.mean_right = np.zeros(shape, dtype=DTYPE)
-        self.mean_init = np.zeros(shape, dtype=DTYPE)
+        self.sum_left = np.zeros(shape, dtype=DTYPE)
+        self.sum_right = np.zeros(shape, dtype=DTYPE)
+        self.sum_init = np.zeros(shape, dtype=DTYPE)
         self.sq_sum_right = np.zeros(shape, dtype=DTYPE)
         self.sq_sum_left = np.zeros(shape, dtype=DTYPE)
         self.sq_sum_init = np.zeros(shape, dtype=DTYPE)
-        self.var_left = np.zeros(shape, dtype=DTYPE)
-        self.var_right = np.zeros(shape, dtype=DTYPE)
         self.n_samples = n_samples
 
         cdef int j = 0
@@ -352,13 +338,9 @@ cdef class RegressionCriterion(Criterion):
             for y1 in range(y.shape[1]):
                 for y2 in range(y.shape[2]):
                     for y3 in range(y.shape[3]):
-                        self.sq_sum_init[y1, y2, y3] += (y[j, y1, y2, y3] * y[j, y1, y2, y3])
-                        self.mean_init[y1, y2, y3] += y[j, y1, y2, y3]
-
-        for y1 in range(y.shape[1]):
-            for y2 in range(y.shape[2]):
-                for y3 in range(y.shape[3]):
-                    self.mean_init[y1, y2, y3] = self.mean_init[y1, y2, y3] / self.n_samples
+                        y_idx = y[j, y1, y2, y3]
+                        self.sum_init[y1, y2, y3] += y_idx
+                        self.sq_sum_init[y1, y2, y3] += y_idx * y_idx
 
         self.reset()
 
@@ -371,17 +353,10 @@ cdef class RegressionCriterion(Criterion):
         """
         self.n_right = self.n_samples
         self.n_left = 0
-        self.mean_right[...] = self.mean_init
-        self.mean_left[...] = 0.0
+        self.sum_right[...] = self.sum_init
+        self.sum_left[...] = 0.0
         self.sq_sum_right[...] = self.sq_sum_init
         self.sq_sum_left[...] = 0.0
-        self.var_left[...] = 0.0
-
-        for y1 in range(self.y1):
-            for y2 in range(self.y2):
-                for y3 in range(self.y3):
-                    self.var_right[y1, y2, y3] = self.sq_sum_right[y1, y2, y3] - \
-                        self.n_samples * (self.mean_right[y1, y2, y3] * self.mean_right[y1, y2, y3])
 
 
     cdef int update(self, int a, int b, DTYPE_t[:,:,:,:] y, int *X_argsorted_i,
@@ -391,31 +366,25 @@ cdef class RegressionCriterion(Criterion):
         cdef double y_idx = 0.0
         cdef int idx, j
         # post condition: all samples from [0:b) are on the left side
-        for idx from a <= idx < b:
-            j = X_argsorted_i[idx]
-            if sample_mask[j] == 0:
+        for j in range(a, b):
+
+            idx = X_argsorted_i[j]
+            if sample_mask[idx] == 0:
                 continue
 
             for y1 in range(y.shape[1]):
                 for y2 in range(y.shape[2]):
                     for y3 in range(y.shape[3]):
-                        y_idx = y[j, y1, y2, y3]
+                        y_idx = y[idx, y1, y2, y3]
+
+                        self.sum_left[y1, y2, y3] = self.sum_left[y1, y2, y3] + y_idx
+                        self.sum_right[y1, y2, y3] = self.sum_right[y1, y2, y3] - y_idx
+
                         self.sq_sum_left[y1, y2, y3] = self.sq_sum_left[y1, y2, y3] + (y_idx * y_idx)
                         self.sq_sum_right[y1, y2, y3] = self.sq_sum_right[y1, y2, y3] - (y_idx * y_idx)
 
-                        self.mean_left[y1, y2, y3] = (self.n_left * self.mean_left[y1, y2, y3] + y_idx) / \
-                            <double>(self.n_left + 1)
-                        self.mean_right[y1, y2, y3] = ((self.n_samples - self.n_left) * \
-                            self.mean_right[y1, y2, y3] - y_idx) / \
-                            <double>(self.n_samples - self.n_left - 1)
-
                         self.n_right -= 1
                         self.n_left += 1
-
-                        self.var_left[y1, y2, y3] = self.sq_sum_left[y1, y2, y3] - \
-                            self.n_left * (self.mean_left[y1, y2, y3] * self.mean_left[y1, y2, y3])
-                        self.var_right[y1, y2, y3] = self.sq_sum_right[y1, y2, y3] - \
-                            self.n_right * (self.mean_right[y1, y2, y3] * self.mean_right[y1, y2, y3])
 
         return self.n_left
 
@@ -434,9 +403,15 @@ cdef class RegressionCriterion(Criterion):
         for i from 0 <= i < self.y1:
             for j from 0 <= j < self.y2:
                 for k from 0 <= k < self.y3:
-                    r[i, j, k] = self.mean_init[i, j, k]
+                    r[i, j, k] = self.sum_init[i, j, k] / self.n_samples
         return r
 
+
+cpdef double sse(double s, double ss, int n):
+    if n == 0:
+        return 0.0
+    cdef double mean = s / <double>(n)
+    return ss - n * (mean ** 2)
 
 
 cdef class MSE(RegressionCriterion):
@@ -451,11 +426,36 @@ cdef class MSE(RegressionCriterion):
         for y1 in range(self.y1):
             for y2 in range(self.y2):
                 for y3 in range(self.y3):
-                    result_left += self.var_left[y1, y2, y3]
-                    result_right += self.var_right[y1, y2, y3]
-        result_left *= (1 / <double>(self.n_left))
-        result_right *= (1 / <double>(self.n_right))
-        return result_left + result_right
+                    result_left += sse(self.sum_left[y1, y2, y3],
+                                       self.sq_sum_left[y1, y2, y3],
+                                       self.n_left)
+                    result_right += sse(self.sum_right[y1, y2, y3],
+                                       self.sq_sum_right[y1, y2, y3],
+                                       self.n_right)
+        cdef double final = result_left + result_right
+        return final
+
+
+cpdef crit_init(Criterion c, DTYPE_t[:,:,:,:] y, np.ndarray sample_mask, int n_samples,
+                   int n_total_samples):
+    cdef BOOL_t *sample_mask_ptr = <BOOL_t *>sample_mask.data
+    c.init(y, sample_mask_ptr, n_samples, n_total_samples)
+
+
+cpdef int crit_update(Criterion c, int a, int b, DTYPE_t[:,:,:,:] y,
+                      np.ndarray X_argsorted,
+                      np.ndarray sample_mask):
+    cdef BOOL_t *sample_mask_ptr = <BOOL_t *>sample_mask.data
+    cdef int *X_argsorted_i = <int *>X_argsorted.data
+
+    result = c.update(a, b, y, X_argsorted_i, sample_mask_ptr)
+
+    return result
+
+
+cpdef double crit_eval(Criterion c):
+    return c.eval()
+
 
 
 ################################################################################

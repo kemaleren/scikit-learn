@@ -247,13 +247,24 @@ cpdef double sse(double ss, double m, int n):
 
 
 cdef class RegressionCriterion(Criterion):
-    """Abstract criterion for regression. Computes variance of the
-       target values left and right of the split point.
+    """
+    Abstract criterion for regression. Computes variance of the
+    target values left and right of the split point.
+
+    """
+    pass
+
+
+cdef class MSE(RegressionCriterion):
+    """Mean squared error impurity criterion.
+
+    MSE = var_left + var_right
 
     Computation is linear in `n_samples` by using ::
 
         var = \sum_i^n (y_i - y_bar) ** 2
             = (\sum_i^n y_i ** 2) - n_samples y_bar ** 2
+
 
     Attributes
     ----------
@@ -275,8 +286,9 @@ cdef class RegressionCriterion(Criterion):
 
     n_right : int
         number of samples right of split point.
-    """
 
+
+    """
     cdef int n_samples
     cdef int n_right
     cdef int n_left
@@ -424,10 +436,6 @@ cdef class RegressionCriterion(Criterion):
                                                      self.n_right)
 
 
-    cdef double eval(self):
-        pass
-
-
     cpdef np.ndarray init_value(self):
         ## TODO is calling np.asarray a performance issue?
         shape = (self.y1, self.y2, self.y3)
@@ -441,12 +449,6 @@ cdef class RegressionCriterion(Criterion):
                     r[i, j, k] = self.mean_init[i, j, k]
         return r
 
-
-cdef class MSE(RegressionCriterion):
-    """Mean squared error impurity criterion.
-
-    MSE = var_left + var_right
-    """
 
     cdef double eval(self):
         cdef double result_left = 0.0

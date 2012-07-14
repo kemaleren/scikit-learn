@@ -44,9 +44,9 @@ def sse(x):
 
 def test_sse():
     y = np.random.randn(20)
-    s = y.sum()
+    m = y.mean()
     ss = (y * y).sum()
-    result = tree._tree.sse(s, ss, len(y))
+    result = tree._tree.sse(ss, m, len(y))
     exp = sse(y)
     assert_almost_equal(exp, result)
 

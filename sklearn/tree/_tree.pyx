@@ -242,6 +242,10 @@ cdef class Entropy(ClassificationCriterion):
         return e1 + e2
 
 
+cpdef double sse(double ss, double m, int n):
+    return ss - <double>(n) * (m ** 2)
+
+
 cdef class RegressionCriterion(Criterion):
     """Abstract criterion for regression. Computes variance of the
        target values left and right of the split point.
@@ -277,10 +281,13 @@ cdef class RegressionCriterion(Criterion):
     cdef int n_right
     cdef int n_left
 
-    cdef DTYPE_t[:,:,:] sum_left
-    cdef DTYPE_t[:,:,:] sum_right
+    cdef DTYPE_t[:,:,:] mean_left
+    cdef DTYPE_t[:,:,:] mean_right
 
-    cdef DTYPE_t[:,:,:] sum_init
+    cdef DTYPE_t[:,:,:] var_left
+    cdef DTYPE_t[:,:,:] var_right
+
+    cdef DTYPE_t[:,:,:] mean_init
 
     cdef DTYPE_t[:,:,:] sq_sum_right
     cdef DTYPE_t[:,:,:] sq_sum_left
@@ -299,10 +306,13 @@ cdef class RegressionCriterion(Criterion):
         self.y2 = 0
         self.y3 = 0
 
-        sum_left = None
-        sum_right = None
+        mean_left = None
+        mean_right = None
 
-        sum_init = None
+        var_left = None
+        var_right = None
+
+        mean_init = None
 
         sq_sum_right = None
         sq_sum_left = None
@@ -320,12 +330,14 @@ cdef class RegressionCriterion(Criterion):
         self.y1 = y.shape[1]
         self.y2 = y.shape[2]
         self.y3 = y.shape[3]
-        self.sum_left = np.zeros(shape, dtype=DTYPE)
-        self.sum_right = np.zeros(shape, dtype=DTYPE)
-        self.sum_init = np.zeros(shape, dtype=DTYPE)
+        self.mean_left = np.zeros(shape, dtype=DTYPE)
+        self.mean_right = np.zeros(shape, dtype=DTYPE)
+        self.mean_init = np.zeros(shape, dtype=DTYPE)
         self.sq_sum_right = np.zeros(shape, dtype=DTYPE)
         self.sq_sum_left = np.zeros(shape, dtype=DTYPE)
         self.sq_sum_init = np.zeros(shape, dtype=DTYPE)
+        self.var_left = np.zeros(shape, dtype=DTYPE)
+        self.var_right = np.zeros(shape, dtype=DTYPE)
         self.n_samples = n_samples
 
         cdef int j = 0
@@ -339,10 +351,16 @@ cdef class RegressionCriterion(Criterion):
                 for y2 in range(y.shape[2]):
                     for y3 in range(y.shape[3]):
                         y_idx = y[j, y1, y2, y3]
-                        self.sum_init[y1, y2, y3] += y_idx
-                        self.sq_sum_init[y1, y2, y3] += y_idx * y_idx
+                        self.mean_init[y1, y2, y3] += y_idx
+                        self.sq_sum_init[y1, y2, y3] += (y_idx * y_idx)
 
+
+        for y1 in range(y.shape[1]):
+            for y2 in range(y.shape[2]):
+                for y3 in range(y.shape[3]):
+                    self.mean_init[y1, y2, y3] /= n_samples
         self.reset()
+
 
     cdef void reset(self):
         """Reset criterion for new feature.
@@ -353,10 +371,11 @@ cdef class RegressionCriterion(Criterion):
         """
         self.n_right = self.n_samples
         self.n_left = 0
-        self.sum_right[...] = self.sum_init
-        self.sum_left[...] = 0.0
+        self.mean_right[...] = self.mean_init
+        self.mean_left[...] = 0.0
         self.sq_sum_right[...] = self.sq_sum_init
         self.sq_sum_left[...] = 0.0
+        self.update_var()
 
 
     cdef int update(self, int a, int b, DTYPE_t[:,:,:,:] y, int *X_argsorted_i,
@@ -377,16 +396,32 @@ cdef class RegressionCriterion(Criterion):
                     for y3 in range(y.shape[3]):
                         y_idx = y[idx, y1, y2, y3]
 
-                        self.sum_left[y1, y2, y3] = self.sum_left[y1, y2, y3] + y_idx
-                        self.sum_right[y1, y2, y3] = self.sum_right[y1, y2, y3] - y_idx
-
                         self.sq_sum_left[y1, y2, y3] = self.sq_sum_left[y1, y2, y3] + (y_idx * y_idx)
                         self.sq_sum_right[y1, y2, y3] = self.sq_sum_right[y1, y2, y3] - (y_idx * y_idx)
 
+                        self.mean_left[y1, y2, y3] = (self.n_left * self.mean_left[y1, y2, y3] + y_idx) / \
+                            <double>(self.n_left + 1)
+
+                        self.mean_right[y1, y2, y3] = ((self.n_samples - self.n_left) * \
+                                                           self.mean_right[y1, y2, y3] - y_idx) / \
+                                                           <double>(self.n_samples - self.n_left - 1)
+
                         self.n_right -= 1
                         self.n_left += 1
-
+        self.update_var()
         return self.n_left
+
+
+    cdef void update_var(self):
+        for y1 in range(self.y1):
+            for y2 in range(self.y2):
+                for y3 in range(self.y3):
+                    self.var_left[y1, y2, y3] = sse(self.sq_sum_left[y1, y2, y3],
+                                                    self.mean_left[y1, y2, y3],
+                                                    self.n_left)
+                    self.var_right[y1, y2, y3] = sse(self.sq_sum_right[y1, y2, y3],
+                                                     self.mean_right[y1, y2, y3],
+                                                     self.n_right)
 
 
     cdef double eval(self):
@@ -403,15 +438,8 @@ cdef class RegressionCriterion(Criterion):
         for i from 0 <= i < self.y1:
             for j from 0 <= j < self.y2:
                 for k from 0 <= k < self.y3:
-                    r[i, j, k] = self.sum_init[i, j, k] / self.n_samples
+                    r[i, j, k] = self.mean_init[i, j, k]
         return r
-
-
-cpdef double sse(double s, double ss, int n):
-    if n == 0:
-        return 0.0
-    cdef double mean = s / <double>(n)
-    return ss - n * (mean ** 2)
 
 
 cdef class MSE(RegressionCriterion):
@@ -426,12 +454,8 @@ cdef class MSE(RegressionCriterion):
         for y1 in range(self.y1):
             for y2 in range(self.y2):
                 for y3 in range(self.y3):
-                    result_left += sse(self.sum_left[y1, y2, y3],
-                                       self.sq_sum_left[y1, y2, y3],
-                                       self.n_left)
-                    result_right += sse(self.sum_right[y1, y2, y3],
-                                       self.sq_sum_right[y1, y2, y3],
-                                       self.n_right)
+                    result_left += self.var_left[y1, y2, y3]
+                    result_right += self.var_right[y1, y2, y3]
         cdef double final = result_left + result_right
         return final
 

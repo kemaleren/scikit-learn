@@ -115,6 +115,21 @@ def test_regression_toy():
     assert_almost_equal(clf.predict(T), true_result)
 
 
+def test_regression_multidim():
+    x = np.array([-1] * 5 + [1] * 5).reshape(10, 1)
+    y = np.array([-1] * 8 * 5 + [1] * 8 * 5).reshape(10, 2, 2, 2)
+
+    x_test = np.array([-1, 1]).reshape(2, 1)
+    y_test = np.array([-1] * 8 + [1] * 8).reshape(2, 2, 2, 2,)
+
+    clf = tree.DecisionTreeRegressor()
+    clf.fit(x, y)
+
+    preds = clf.predict(x_test)
+
+    assert_almost_equal(preds, y_test)
+
+
 def test_graphviz_toy():
     """Check correctness of graphviz output on a toy dataset."""
     clf = tree.DecisionTreeClassifier(max_depth=3, min_samples_split=1)

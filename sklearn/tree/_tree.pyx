@@ -418,8 +418,8 @@ cdef class MSE(RegressionCriterion):
                                                            self.mean_right[y1, y2, y3] - y_idx) / \
                                                            <double>(self.n_samples - self.n_left - 1)
 
-                        self.n_right -= 1
-                        self.n_left += 1
+            self.n_right -= 1
+            self.n_left += 1
         self.update_var()
         return self.n_left
 

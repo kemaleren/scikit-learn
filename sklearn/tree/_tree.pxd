@@ -148,6 +148,8 @@ cdef class Tree:
                                 double* _best_t, double* _best_error,
                                 double* _initial_error)
 
+    cpdef collapse(self)
+
     cpdef predict(self, np.ndarray[DTYPE_t, ndim=2] X)
 
     cpdef apply(self, np.ndarray[DTYPE_t, ndim=2] X)

@@ -363,6 +363,23 @@ cdef class Tree:
         if capacity < self.node_count:
             self.node_count = capacity
 
+    cpdef collapse(self):
+        n_outputs = 1
+        value_stride = n_outputs * self.max_n_classes
+
+        cdef double* tmp_value = <double*> calloc(self.capacity * value_stride, sizeof(double))
+        if tmp_value == NULL:
+            raise Exception('could not allocate memory')
+
+        for i in range(self.node_count):
+            for j in range(self.value_stride):
+                tmp_value[i] += self.value[self.value_stride * i + j]
+
+        free(self.value)
+        self.value = tmp_value
+        self.value_stride = value_stride
+        self.n_outputs = n_outputs
+
     cpdef build(self, np.ndarray X, np.ndarray y,
                 np.ndarray sample_mask=None,
                 np.ndarray X_argsorted=None,

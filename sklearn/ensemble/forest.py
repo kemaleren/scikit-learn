@@ -578,7 +578,7 @@ class ForestRegressor(BaseForest, RegressorMixin):
         # Reduce
         y_hat = sum(all_y_hat) / self.n_estimators
 
-        return y_hat
+        return y_hat.todense()
 
 
 class RandomForestClassifier(ForestClassifier):

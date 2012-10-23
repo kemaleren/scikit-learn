@@ -15,6 +15,7 @@
 cimport cython
 
 import numpy as np
+from scipy.sparse import lil_matrix
 cimport numpy as np
 np.import_array()
 
@@ -829,9 +830,7 @@ cdef class Tree:
         cdef int offset_node
         cdef int offset_output
 
-        cdef np.ndarray[np.float64_t, ndim=3] out
-        out = np.zeros((n_samples, self.n_outputs, self.max_n_classes), dtype=np.float64)
-
+        out = lil_matrix((n_samples, self.n_outputs))
         for i from 0 <= i < n_samples:
             node_id = 0
 
@@ -848,9 +847,10 @@ cdef class Tree:
                 offset_output = k * self.max_n_classes
 
                 for c from 0 <= c < self.n_classes[k]:
-                    out[i, k, c] = self.value[offset_node + offset_output + c]
-
-        return out
+                    val = self.value[offset_node + offset_output + c]
+                    if val != 0:
+                        out[i, k] = val
+        return out.tocsr()
 
     cpdef apply(self, np.ndarray[DTYPE_t, ndim=2] X):
         """Finds the terminal region (=leaf node) for each sample in X."""

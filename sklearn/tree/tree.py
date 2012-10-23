@@ -337,8 +337,7 @@ class BaseDecisionTree(BaseEstimator, SelectorMixin):
                                                                     axis=1),
                                                           axis=0)
         else:
-            predictions = P[:, :, 0]
-
+            predictions = P
         if self.n_outputs_ == 1:
             predictions = predictions.reshape((n_samples, ))
 
@@ -485,7 +484,7 @@ class DecisionTreeClassifier(BaseDecisionTree, ClassifierMixin):
                              % (self.n_features_, n_features))
 
         proba = []
-        P = self.tree_.predict(X)
+        P = self.tree_.predict(X).todense()
 
         for k in xrange(self.n_outputs_):
             P_k = P[:, k, :self.n_classes_[k]]

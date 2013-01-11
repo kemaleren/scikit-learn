@@ -1482,8 +1482,8 @@ cdef class RegressionCriterion(Criterion):
     Computes variance of the target values left and right of the split point.
     Computation is linear in `n_samples` by using ::
 
-        var = \sum_i^n (y_i - y_bar) ** 2
-            = (\sum_i^n y_i ** 2) - n_samples y_bar ** 2
+        n_samples * var = \sum_i^n (y_i - y_bar) ** 2
+                        = (\sum_i^n y_i ** 2) - n_samples y_bar ** 2
 
     Attributes
     ----------
@@ -1512,19 +1512,18 @@ cdef class RegressionCriterion(Criterion):
         sq_sum_right[k] is the sum of squared target values right of the split
         point for output k.
 
-    var_left : double*
-        var_left[k] is the variance of the values left of the split point for
-        output k.
+    sse_left : double*
+        sse_left[k] is the *un-normalized* variance of the values left
+        of the split point for output k.
 
-    var_right : double*
-        var_right[k] is the variance of the values riht of the split point for
-        output k.
+    sse_right : double*
+        sse_right[k] is the *un-normalized* variance of the values right of
+        the split point for output k.
 
     n_left : int
         The number of samples left of split point.
 
     n_right : int
-        The number of samples right of split point.
 
     weighted_n_left : double
         The weighted number of samples left of splitting point.
@@ -1538,8 +1537,8 @@ cdef class RegressionCriterion(Criterion):
     cdef double* sq_sum_left
     cdef double* sq_sum_right
     cdef double* sq_sum_init
-    cdef double* var_left
-    cdef double* var_right
+    cdef double* sse_left
+    cdef double* sse_right
 
     def __cinit__(self, int n_outputs):
         """Constructor."""
@@ -1561,8 +1560,8 @@ cdef class RegressionCriterion(Criterion):
         self.sq_sum_left = <double*> calloc(n_outputs, sizeof(double))
         self.sq_sum_right = <double*> calloc(n_outputs, sizeof(double))
         self.sq_sum_init = <double*> calloc(n_outputs, sizeof(double))
-        self.var_left = <double*> calloc(n_outputs, sizeof(double))
-        self.var_right = <double*> calloc(n_outputs, sizeof(double))
+        self.sse_left = <double*> calloc(n_outputs, sizeof(double))
+        self.sse_right = <double*> calloc(n_outputs, sizeof(double))
 
         # Check for allocation errors
         if self.mean_left == NULL or \
@@ -1571,16 +1570,16 @@ cdef class RegressionCriterion(Criterion):
            self.sq_sum_left == NULL or \
            self.sq_sum_right == NULL or \
            self.sq_sum_init == NULL or \
-           self.var_left == NULL or \
-           self.var_right == NULL:
+           self.sse_left == NULL or \
+           self.sse_right == NULL:
             free(self.mean_left)
             free(self.mean_right)
             free(self.mean_init)
             free(self.sq_sum_left)
             free(self.sq_sum_right)
             free(self.sq_sum_init)
-            free(self.var_left)
-            free(self.var_right)
+            free(self.sse_left)
+            free(self.sse_right)
             raise MemoryError()
 
     def __dealloc__(self):
@@ -1591,8 +1590,8 @@ cdef class RegressionCriterion(Criterion):
         free(self.sq_sum_left)
         free(self.sq_sum_right)
         free(self.sq_sum_init)
-        free(self.var_left)
-        free(self.var_right)
+        free(self.sse_left)
+        free(self.sse_right)
 
     def __reduce__(self):
         return (RegressionCriterion,
@@ -1620,8 +1619,8 @@ cdef class RegressionCriterion(Criterion):
         cdef double* sq_sum_left = self.sq_sum_left
         cdef double* sq_sum_right = self.sq_sum_right
         cdef double* sq_sum_init = self.sq_sum_init
-        cdef double* var_left = self.var_left
-        cdef double* var_right = self.var_right
+        cdef double* sse_left = self.sse_left
+        cdef double* sse_right = self.sse_right
         cdef int n_outputs = self.n_outputs
 
         cdef int k = 0
@@ -1633,8 +1632,8 @@ cdef class RegressionCriterion(Criterion):
             sq_sum_right[k] = 0.0
             sq_sum_left[k] = 0.0
             sq_sum_init[k] = 0.0
-            var_left[k] = 0.0
-            var_right[k] = 0.0
+            sse_left[k] = 0.0
+            sse_right[k] = 0.0
 
         self.n_samples = n_samples
         self.weighted_n_samples = weighted_n_samples
@@ -1672,8 +1671,8 @@ cdef class RegressionCriterion(Criterion):
         cdef double* sq_sum_left = self.sq_sum_left
         cdef double* sq_sum_right = self.sq_sum_right
         cdef double* sq_sum_init = self.sq_sum_init
-        cdef double* var_left = self.var_left
-        cdef double* var_right = self.var_right
+        cdef double* sse_left = self.sse_left
+        cdef double* sse_right = self.sse_right
 
         cdef double weighted_n_samples = self.weighted_n_samples
         cdef int n_outputs = self.n_outputs
@@ -1690,8 +1689,8 @@ cdef class RegressionCriterion(Criterion):
             mean_left[k] = 0.0
             sq_sum_right[k] = sq_sum_init[k]
             sq_sum_left[k] = 0.0
-            var_left[k] = 0.0
-            var_right[k] = (sq_sum_right[k] -
+            sse_left[k] = 0.0
+            sse_right[k] = (sq_sum_right[k] -
                 weighted_n_samples * (mean_right[k] * mean_right[k]))
 
     cdef bool update(self, int a, int b,
@@ -1705,8 +1704,8 @@ cdef class RegressionCriterion(Criterion):
         cdef double* mean_right = self.mean_right
         cdef double* sq_sum_left = self.sq_sum_left
         cdef double* sq_sum_right = self.sq_sum_right
-        cdef double* var_left = self.var_left
-        cdef double* var_right = self.var_right
+        cdef double* sse_left = self.sse_left
+        cdef double* sse_right = self.sse_right
 
         cdef int n_samples = self.n_samples
         cdef double weighted_n_samples = self.weighted_n_samples
@@ -1750,8 +1749,8 @@ cdef class RegressionCriterion(Criterion):
             self.weighted_n_right = weighted_n_right
 
             for k from 0 <= k < n_outputs:
-                var_left[k] = sq_sum_left[k] - weighted_n_left * (mean_left[k] * mean_left[k])
-                var_right[k] = sq_sum_right[k] - weighted_n_right * (mean_right[k] * mean_right[k])
+                sse_left[k] = sq_sum_left[k] - weighted_n_left * (mean_left[k] * mean_left[k])
+                sse_right[k] = sq_sum_right[k] - weighted_n_right * (mean_right[k] * mean_right[k])
 
         # Skip splits that result in nodes with net 0 or negative weight
         if (weighted_n_left <= 0 or
@@ -1776,25 +1775,48 @@ cdef class RegressionCriterion(Criterion):
             buffer_value[k] = mean_init[k]
 
 
+cdef double _total_sse(double* sse, int n_outputs):
+    """Add sse values for each response."""
+    cdef int k
+    cdef double total = 0.0
+    for k from 0 <= k < n_outputs:
+        total += sse[k]
+    return total
+
+
 cdef class MSE(RegressionCriterion):
-    """Mean squared error impurity criterion.
-
-        MSE = var_left + var_right
     """
+    Overall mean squared error impurity criterion.
 
+    MSE = (sse_left + sse_right) / N
+
+    """
     cdef double eval(self):
-        cdef double* var_left = self.var_left
-        cdef double* var_right = self.var_right
+        cdef double* sse_left = self.sse_left
+        cdef double* sse_right = self.sse_right
+        cdef int n_outputs = self.n_outputs
+        cdef double total = _total_sse(sse_left, n_outputs) + \
+                            _total_sse(sse_right, n_outputs)
+        return total / n_outputs
 
+
+cdef class SSE(RegressionCriterion):
+    """
+    Weighted sum of squared error impurity criterion.
+
+    SSE = (n_left * sse_left + n_right * sse_right) / N
+
+    """
+    cdef double eval(self):
+        cdef double* sse_left = self.sse_left
+        cdef double* sse_right = self.sse_right
         cdef int n_outputs = self.n_outputs
 
-        cdef int k
-        cdef double total = 0.0
+        cdef double total_sse_left = _total_sse(sse_left, n_outputs)
+        cdef double total_sse_right = _total_sse(sse_right, n_outputs)
 
-        for k from 0 <= k < n_outputs:
-            total += var_left[k]
-            total += var_right[k]
-
+        cdef double total = (total_sse_left * self.weighted_n_left) + \
+                            (total_sse_right * self.weighted_n_right)
         return total / n_outputs
 
 

@@ -38,6 +38,7 @@ CLASSIFICATION = {
 
 REGRESSION = {
     "mse": _tree.MSE,
+    "sse": _tree.SSE,
 }
 
 

@@ -635,6 +635,7 @@ class ForestRegressor(BaseForest, RegressorMixin):
             n_jobs=n_jobs,
             random_state=random_state,
             verbose=verbose)
+        self.collapsed = False
 
     def predict(self, X):
         """Predict regression target for X.
@@ -670,7 +671,14 @@ class ForestRegressor(BaseForest, RegressorMixin):
 
         return y_hat
 
+    def fit(self, X, y, sample_weight=None):
+        super(ForestRegressor, self).fit(X, y, sample_weight)
+        self.collapsed = False
+
     def collapse(self):
+        if self.collapsed:
+            return
+        self.collapsed = True
         for t in self.estimators_:
             t.tree_.collapse()
         self.n_outputs_ = 1

@@ -1,4 +1,7 @@
-from .spectral import SpectralCoclustering, SpectralBiclustering
+from .spectral import SpectralCoclustering
+from .spectral import SpectralBiclustering
+from .cheng_church import ChengChurch
 
 __all__ = ['SpectralCoclustering',
-           'SpectralBiclustering',]
+           'SpectralBiclustering',
+           'ChengChurch']

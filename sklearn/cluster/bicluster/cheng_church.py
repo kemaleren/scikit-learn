@@ -40,10 +40,10 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
             raise ValueError("'n_clusters' must be > 0, but its value"
                              " is {}".format(self.n_clusters))
         if self.max_msr < 0:
-            raise ValueError("'max_msr' must be > 0, but its value"
+            raise ValueError("'max_msr' must be > 0.0, but its value"
                              " is {}".format(self.max_msr))
         if self.deletion_threshold < 1:
-            raise ValueError("'deletion_threshold' must be >= 1, but its"
+            raise ValueError("'deletion_threshold' must be >= 1.0, but its"
                              " value is {}".format(self.deletion_threshold))
         if self.row_deletion_cutoff < 1:
             raise ValueError("'row_deletion_cutoff' must be >= 1, but its"

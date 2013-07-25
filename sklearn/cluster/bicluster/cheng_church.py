@@ -101,42 +101,26 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
                              " value is {}".format(
                                  self.column_deletion_cutoff))
 
-    def _sr_array(self, X):
+    def _sr(self, X):
         arr = X - X.mean(axis=1)[None].T - X.mean(axis=0) + X.mean()
         return np.power(arr, 2)
 
-    def _msr(self, X):
-        return self._sr_array(X).mean()
-
-    def _row_msr(self, X):
-        return self._sr_array(X).mean(axis=1)
-
-    def _col_msr(self, X):
-        return self._sr_array(X).mean(axis=0)
-
-    def _sr_array_add(self, rows, cols, X):
-        rows = rows[None].T
-        arr = (X - X[:, cols].mean(axis=1)[:, np.newaxis] -
-               X[rows, :].mean(axis=0) + X[rows, cols].mean())
+    def _sr_add(self, rows, cols, X):
+        arr = (X - X[:, cols].mean(axis=1)[None].T -
+               X[rows, :].mean(axis=0) + X.mean())
         return np.power(arr, 2)
 
-    def _row_msr_add(self, rows, cols, X):
-        return self._sr_array_add(rows, cols, X).mean(axis=1)
-
-    def _col_msr_add(self, rows, cols, X):
-        return self._sr_array_add(rows, cols, X).mean(axis=0)
-
-    def _row_msr_inverse_add(self, rows, cols, X):
-        rows = rows[None].T
+    def _isr_add(self, rows, cols, X):
         arr = (-X + X[:, cols].mean(axis=1)[None].T -
                X[rows, :].mean(axis=0) + X.mean())
-        return np.power(arr, 2).mean(axis=1)
+        return np.power(arr, 2)
 
     def _node_deletion(self, rows, cols, X):
-        while self._msr(X[rows, cols]) > self.max_msr:
+        sr = self._sr(X[rows, cols])
+        while sr.mean() > self.max_msr:
             n_rows, n_cols = len(rows), len(cols)
-            row_msr = self._row_msr(X[rows, cols])
-            col_msr = self._col_msr(X[rows, cols])
+            row_msr = sr.mean(axis=1)
+            col_msr = sr.mean(axis=0)
             row_id = np.argmax(row_msr)
             col_id = np.argmax(col_msr)
             if row_msr[row_id] > col_msr[col_id]:
@@ -146,47 +130,48 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
                 cols = np.setdiff1d(cols, [cols[col_id]])
             if n_rows == len(rows) and n_cols == len(cols):
                 break
+            sr = self._sr(X[rows, cols])
         return rows, cols
 
     def _multiple_node_deletion(self, rows, cols, X):
-        while self._msr(X[rows, cols]) > self.max_msr:
+        sr = self._sr(X[rows, cols])
+        while sr.mean() > self.max_msr:
+            msr = sr.mean()
             n_rows, n_cols = len(rows), len(cols)
-            row_msr = self._row_msr(X[rows, cols])
+            row_msr = sr.mean(axis=1)
             if n_rows >= self.row_deletion_cutoff:
-                to_remove = row_msr > (self.deletion_threshold *
-                                       self._msr(X[rows, cols]))
+                to_remove = row_msr > (self.deletion_threshold * msr)
                 rows = rows.ravel()
                 rows = np.setdiff1d(rows, rows[to_remove])[None].T
 
-            col_msr = self._col_msr(X[rows, cols])
+            col_msr = self._sr(X[rows, cols]).mean(axis=0)
             if n_cols >= self.column_deletion_cutoff:
-                to_remove = col_msr > (self.deletion_threshold *
-                                       self._msr(X[rows, cols]))
+                to_remove = col_msr > (self.deletion_threshold * msr)
                 cols = np.setdiff1d(cols, cols[to_remove])
 
             if n_rows == len(rows) and n_cols == len(cols):
                 rows, cols = self._node_deletion(rows, cols, X)
                 break
+            sr = self._sr(X[rows, cols])
         return rows, cols
 
     def _node_addition(self, rows, cols, X):
         while True:
             n_rows, n_cols = len(rows), len(cols)
-            to_add = (self._col_msr_add(rows, cols, X) <
-                      self._msr(X[rows, cols]))[0]
-            to_add = np.nonzero(to_add)[0]
+            msr = self._sr(X[rows, cols]).mean()
+            col_score = self._sr_add(rows, cols, X).mean(axis=0)
+            to_add = np.nonzero(col_score < msr)[0]
             cols = np.union1d(cols, to_add)
 
-            old_rows = rows.copy()
-            to_add = (self._row_msr_add(rows, cols, X) <
-                      self._msr(X[rows, cols]))
-            to_add = np.nonzero(to_add)[0]
+            msr = self._sr(X[rows, cols]).mean()
+            row_score = self._sr_add(rows, cols, X).mean(axis=1)
+            to_add = np.nonzero(row_score < msr)[0]
+            old_rows = rows.copy()  # save for inverse
             rows = np.union1d(rows.ravel(), to_add)[None].T
 
             if self.inverse_rows:
-                to_add = (self._row_msr_inverse_add(old_rows, cols, X) <
-                          self._msr(X[rows, cols]))
-                to_add = np.nonzero(to_add)[0]
+                row_score = self._isr_add(old_rows, cols, X).mean(axis=1)
+                to_add = np.nonzero(row_score < msr)[0]
                 rows = np.union1d(rows.ravel(), to_add)[None].T
 
             if n_rows == len(rows) and n_cols == len(cols):

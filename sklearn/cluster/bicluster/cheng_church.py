@@ -82,9 +82,10 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
         return inverse_row_msr / len(cols)
 
     def _node_deletion(self, rows, cols, X):
-        msr, row_msr, col_msr = self._compute_msr(rows, cols, X)
-        n_rows, n_cols = len(rows), len(cols)
+        msr, _, _ = self._compute_msr(rows, cols, X)
         while msr > self.max_msr:
+            n_rows, n_cols = len(rows), len(cols)
+            _, row_msr, col_msr = self._compute_msr(rows, cols, X)
             row_id = np.argmax(row_msr)
             col_id = np.argmax(col_msr)
             if row_msr[row_id] > col_msr[col_id]:
@@ -93,19 +94,19 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
                 cols = np.setdiff1d(cols, [cols[col_id]])
             if n_rows == len(rows) and n_cols == len(cols):
                 break
-            else:
-                n_rows, n_cols = len(rows), len(cols)
-            msr, row_msr, col_msr = self._compute_msr(rows, cols, X)
+            msr, _, _ = self._compute_msr(rows, cols, X)
         return rows, cols
 
     def _multiple_node_deletion(self, rows, cols, X):
-        msr, row_msr, col_msr = self._compute_msr(rows, cols, X)
-        n_rows, n_cols = len(rows), len(cols)
+        msr, _, _ = self._compute_msr(rows, cols, X)
         while msr > self.max_msr:
+            n_rows, n_cols = len(rows), len(cols)
+            _, row_msr, _ = self._compute_msr(rows, cols, X)
             if n_rows >= self.row_deletion_cutoff:
                 to_remove = row_msr > self.deletion_threshold * msr
                 rows = np.setdiff1d(rows, rows[to_remove])
 
+            _, _, col_msr = self._compute_msr(rows, cols, X)
             if n_cols >= self.column_deletion_cutoff:
                 to_remove = col_msr > self.deletion_threshold * msr
                 rows = np.setdiff1d(cols, cols[to_remove])
@@ -113,31 +114,33 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
             if n_rows == len(rows) and n_cols == len(cols):
                 rows, cols = self._node_deletion(rows, cols, X)
                 break
-            else:
-                n_rows, n_cols = len(rows), len(cols)
-            msr, row_msr, col_msr = self._compute_msr(rows, cols, X)
+            msr, _, _ = self._compute_msr(rows, cols, X)
         return rows, cols
 
     def _node_addition(self, rows, cols, X):
-        msr, row_msr, col_msr = self._compute_msr(rows, cols, X)
-        n_rows, n_cols = len(rows), len(cols)
+        n_total_rows, n_total_cols = X.shape
+        all_rows = np.arange(n_total_rows)
+        all_cols = np.arange(n_total_cols)
+        msr, _, _ = self._compute_msr(rows, cols, X)
         while msr < self.max_msr:
-            to_add = np.nonzero(row_msr < msr)[0]
-            rows = np.union1d(rows, to_add)
-
-            msr, row_msr, col_msr = self._compute_msr(rows, cols, X)
+            n_rows, n_cols = len(rows), len(cols)
+            _, _, col_msr = self._compute_msr(rows, all_cols, X)
             to_add = np.nonzero(col_msr < msr)[0]
             cols = np.union1d(cols, to_add)
 
+            _, row_msr, _ = self._compute_msr(all_rows, cols, X)
+            to_add = np.nonzero(row_msr < msr)[0]
+            rows = np.union1d(rows, to_add)
+
             if self.inverse_rows:
-                inverse_row_msr = self._compute_inverse_row_msr(rows, cols, X)
+                inverse_row_msr = self._compute_inverse_row_msr(
+                    all_rows, cols, X)
                 to_add = np.nonzero(inverse_row_msr < msr)[0]
                 rows = np.union1d(rows, to_add)
 
             if n_rows == len(rows) and n_cols == len(cols):
                 break
-            msr, row_msr, col_msr = self._compute_msr(rows, cols, X)
-            n_rows, n_cols = len(rows), len(cols)
+            msr, _, _ = self._compute_msr(rows, cols, X)
         return rows, cols
 
     def _mask(self, X, rows, cols, generator, minval, maxval):

@@ -13,7 +13,7 @@ def test_cheng_church():
     data[:10, :10] = 20
     data[10:20, 10:20] = 50
     data[20:30, 20:300] = 80
-    model = ChengChurch(n_clusters=3, max_msr=10)
+    model = ChengChurch(n_clusters=3, max_msr=10, random_state=0)
     model.fit(data)
 
     rows = np.zeros((3, 30), dtype=np.bool)

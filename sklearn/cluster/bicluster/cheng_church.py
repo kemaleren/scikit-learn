@@ -116,7 +116,7 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
             if n_cols >= self.column_deletion_cutoff:
                 to_remove = col_msr > (self.deletion_threshold *
                                        self._msr(X[rows, cols]))
-                rows = np.setdiff1d(cols, cols[to_remove])
+                cols = np.setdiff1d(cols, cols[to_remove])
 
             if n_rows == len(rows) and n_cols == len(cols):
                 rows, cols = self._node_deletion(rows, cols, X)
@@ -139,7 +139,7 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
 
             if self.inverse_rows:
                 to_add = (self._row_msr_inverse_add(old_rows, cols, X) <
-                          self._msr(get_submatrix(old_rows, cols, X)))
+                          self._msr(X[rows, cols]))
                 to_add = np.nonzero(to_add)[0]
                 rows = np.union1d(rows.ravel(), to_add)[:, np.newaxis]
 

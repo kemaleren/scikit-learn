@@ -23,6 +23,50 @@ class EmptyBiclusterException(Exception):
     pass
 
 
+class IncrementalSR(object):
+    def __init__(self, rows, cols, arr):
+        self.arr = arr
+        self.rows = np.sort(rows.ravel())
+        self.cols = np.sort(cols.ravel())
+
+        self.sum = arr.sum()
+        self.row_sum = arr.sum(axis=1)
+        self.col_sum = arr.sum(axis=0)
+
+    def remove_row(self, row):
+        vec = self.arr[row, self.cols].ravel()
+        self.sum -= vec.sum()
+        self.col_sum -= vec
+
+        idx = np.searchsorted(self.rows, row)
+        self.rows = np.delete(self.rows, idx)
+        self.row_sum = np.delete(self.row_sum, idx)
+
+    def remove_column(self, col):
+        vec = self.arr[self.rows[None].T, col].ravel()
+        self.sum -= vec.sum()
+        self.row_sum -= vec
+
+        idx = np.searchsorted(self.cols, col)
+        self.cols = np.delete(self.cols, idx)
+        self.col_sum = np.delete(self.col_sum, idx)
+
+    def _row_mean(self):
+        return self.row_sum / len(self.cols)
+
+    def _col_mean(self):
+        return self.col_sum / len(self.rows)
+
+    def _mean(self):
+        return self.sum / (len(self.rows) * len(self.cols))
+
+    def sr(self):
+        arr = (self.arr[self.rows[None].T, self.cols] -
+               self._row_mean()[None].T - self._col_mean() +
+               self._mean())
+        return np.power(arr, 2)
+
+
 class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
                                      BiclusterMixin)):
     """Algorithm to find biclusters with low mean squared residues.
@@ -116,7 +160,8 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
         return np.power(arr, 2)
 
     def _node_deletion(self, rows, cols, X):
-        sr = self._sr(X[rows, cols])
+        inc = IncrementalSR(rows, cols, X)
+        sr = inc.sr()
         while sr.mean() > self.max_msr:
             n_rows, n_cols = len(rows), len(cols)
             row_msr = sr.mean(axis=1)
@@ -125,12 +170,14 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
             col_id = np.argmax(col_msr)
             if row_msr[row_id] > col_msr[col_id]:
                 rows = rows.ravel()
+                inc.remove_row(rows[row_id])
                 rows = np.setdiff1d(rows, [rows[row_id]])[None].T
             else:
+                inc.remove_column(cols[col_id])
                 cols = np.setdiff1d(cols, [cols[col_id]])
             if n_rows == len(rows) and n_cols == len(cols):
                 break
-            sr = self._sr(X[rows, cols])
+            sr = inc.sr()
         return rows, cols
 
     def _multiple_node_deletion(self, rows, cols, X):

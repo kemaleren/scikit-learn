@@ -55,6 +55,8 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
                                  self.column_deletion_cutoff))
 
     def _precompute(self, rows, cols, X):
+        if not (rows.size and cols.size):
+            raise EmptyBiclusterException()
         submatrix = get_submatrix(rows, cols, X)
         row_mean = submatrix.mean(axis=1)
         col_mean = submatrix.mean(axis=0)
@@ -64,13 +66,10 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
     def _compute_msr(self, rows, cols, X):
         submatrix, row_mean, col_mean, mean = \
             self._precompute(rows, cols, X)
-        n_rows, n_cols = submatrix.shape
-        if n_rows == 0 or n_cols == 0:
-            raise EmptyBiclusterException()
         msr_array = submatrix - row_mean[:, np.newaxis] - col_mean + mean
-        msr = np.power(msr_array, 2).sum() / (n_rows * n_cols)
-        row_msr = np.power(msr_array, 2).sum(axis=1) / n_cols
-        col_msr = np.power(msr_array, 2).sum(axis=0) / n_rows
+        msr = np.power(msr_array, 2).mean()
+        row_msr = np.power(msr_array, 2).mean(axis=1)
+        col_msr = np.power(msr_array, 2).mean(axis=0)
         return msr, row_msr, col_msr
 
     def _compute_inverse_row_msr(self, rows, cols, X):
@@ -78,8 +77,8 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
             self._precompute(rows, cols, X)
         inverse_row_msr = \
             -submatrix + row_mean[:, np.newaxis] - col_mean + mean
-        inverse_row_msr = np.power(inverse_row_msr, 2).sum(axis=1)
-        return inverse_row_msr / len(cols)
+        inverse_row_msr = np.power(inverse_row_msr, 2).mean(axis=1)
+        return inverse_row_msr
 
     def _node_deletion(self, rows, cols, X):
         msr, _, _ = self._compute_msr(rows, cols, X)

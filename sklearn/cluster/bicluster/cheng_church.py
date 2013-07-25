@@ -63,28 +63,33 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
         mean = submatrix.mean()
         return submatrix, row_mean, col_mean, mean
 
-    def _compute_msr(self, rows, cols, X):
+    def _msr_array(self, rows, cols, X):
         submatrix, row_mean, col_mean, mean = \
             self._precompute(rows, cols, X)
-        msr_array = submatrix - row_mean[:, np.newaxis] - col_mean + mean
-        msr = np.power(msr_array, 2).mean()
-        row_msr = np.power(msr_array, 2).mean(axis=1)
-        col_msr = np.power(msr_array, 2).mean(axis=0)
-        return msr, row_msr, col_msr
+        arr = submatrix - row_mean[:, np.newaxis] - col_mean + mean
+        return np.power(arr, 2)
 
-    def _compute_inverse_row_msr(self, rows, cols, X):
+    def _msr(self, rows, cols, X):
+        return self._msr_array(rows, cols, X).mean()
+
+    def _row_msr(self, rows, cols, X):
+        return self._msr_array(rows, cols, X).mean(axis=1)
+
+    def _col_msr(self, rows, cols, X):
+        return self._msr_array(rows, cols, X).mean(axis=0)
+
+    def _inverse_row_msr(self, rows, cols, X):
         submatrix, row_mean, col_mean, mean = \
             self._precompute(rows, cols, X)
         inverse_row_msr = \
             -submatrix + row_mean[:, np.newaxis] - col_mean + mean
-        inverse_row_msr = np.power(inverse_row_msr, 2).mean(axis=1)
-        return inverse_row_msr
+        return  np.power(inverse_row_msr, 2).mean(axis=1)
 
     def _node_deletion(self, rows, cols, X):
-        msr, _, _ = self._compute_msr(rows, cols, X)
-        while msr > self.max_msr:
+        while self._msr(rows, cols, X) > self.max_msr:
             n_rows, n_cols = len(rows), len(cols)
-            _, row_msr, col_msr = self._compute_msr(rows, cols, X)
+            row_msr = self._row_msr(rows, cols, X)
+            col_msr = self._col_msr(rows, cols, X)
             row_id = np.argmax(row_msr)
             col_id = np.argmax(col_msr)
             if row_msr[row_id] > col_msr[col_id]:
@@ -93,53 +98,51 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
                 cols = np.setdiff1d(cols, [cols[col_id]])
             if n_rows == len(rows) and n_cols == len(cols):
                 break
-            msr, _, _ = self._compute_msr(rows, cols, X)
         return rows, cols
 
     def _multiple_node_deletion(self, rows, cols, X):
-        msr, _, _ = self._compute_msr(rows, cols, X)
-        while msr > self.max_msr:
+        while self._msr(rows, cols, X) > self.max_msr:
             n_rows, n_cols = len(rows), len(cols)
-            _, row_msr, _ = self._compute_msr(rows, cols, X)
+            row_msr = self._row_msr(rows, cols, X)
             if n_rows >= self.row_deletion_cutoff:
-                to_remove = row_msr > self.deletion_threshold * msr
+                to_remove = row_msr > (self.deletion_threshold *
+                                       self._msr(rows, cols, X))
                 rows = np.setdiff1d(rows, rows[to_remove])
 
-            _, _, col_msr = self._compute_msr(rows, cols, X)
+            col_msr = self._col_msr(rows, cols, X)
             if n_cols >= self.column_deletion_cutoff:
-                to_remove = col_msr > self.deletion_threshold * msr
+                to_remove = col_msr > (self.deletion_threshold *
+                                       self._msr(rows, cols, X))
                 rows = np.setdiff1d(cols, cols[to_remove])
 
             if n_rows == len(rows) and n_cols == len(cols):
                 rows, cols = self._node_deletion(rows, cols, X)
                 break
-            msr, _, _ = self._compute_msr(rows, cols, X)
         return rows, cols
 
     def _node_addition(self, rows, cols, X):
         n_total_rows, n_total_cols = X.shape
         all_rows = np.arange(n_total_rows)
         all_cols = np.arange(n_total_cols)
-        msr, _, _ = self._compute_msr(rows, cols, X)
-        while msr < self.max_msr:
+        while self._msr(rows, cols, X) > self.max_msr:
             n_rows, n_cols = len(rows), len(cols)
-            _, _, col_msr = self._compute_msr(rows, all_cols, X)
-            to_add = np.nonzero(col_msr < msr)[0]
+            col_msr = self._col_msr(rows, all_cols, X)
+            to_add = np.nonzero(col_msr < self._msr(rows, cols, X))[0]
             cols = np.union1d(cols, to_add)
 
             _, row_msr, _ = self._compute_msr(all_rows, cols, X)
-            to_add = np.nonzero(row_msr < msr)[0]
+            to_add = np.nonzero(row_msr < self._msr(rows, cols, X))[0]
             rows = np.union1d(rows, to_add)
 
             if self.inverse_rows:
-                inverse_row_msr = self._compute_inverse_row_msr(
+                inverse_row_msr = self._inverse_row_msr(
                     all_rows, cols, X)
-                to_add = np.nonzero(inverse_row_msr < msr)[0]
+                to_add = np.nonzero(inverse_row_msr <
+                                    self._msr(rows, cols, X))[0]
                 rows = np.union1d(rows, to_add)
 
             if n_rows == len(rows) and n_cols == len(cols):
                 break
-            msr, _, _ = self._compute_msr(rows, cols, X)
         return rows, cols
 
     def _mask(self, X, rows, cols, generator, minval, maxval):

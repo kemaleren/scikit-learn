@@ -1497,6 +1497,53 @@ def make_checkerboard(shape, n_clusters, noise=0.0, minval=10,
 
 def make_msr(shape, n_clusters, noise=0.0, minval=0, maxval=100,
              shuffle=True, random_state=None):
+    """Generate an array with biclusters with low mean squared residue.
+
+    Parameters
+    ----------
+    shape : iterable (n_rows, n_cols)
+        The shape of the result.
+
+    n_clusters : integer
+        The number of row and column clusters.
+
+    noise : float, optional (default=0.0)
+        The standard deviation of the gaussian noise.
+
+    minval : int, optional (default=10)
+        Minimum value for generating data..
+
+    maxval : int, optional (default=100)
+        Maximum value for generating data.
+
+    shuffle : boolean, optional (default=True)
+        Shuffle the samples.
+
+    random_state : int, RandomState instance or None, optional (default=None)
+        If int, random_state is the seed used by the random number generator;
+        If RandomState instance, random_state is the random number generator;
+        If None, the random number generator is the RandomState instance used
+        by `np.random`.
+
+    Returns
+    -------
+    X : array of shape `shape`
+        The generated array.
+
+    rows_ : array of shape (n_clusters, X.shape[0],)
+        The indicators for cluster membership of each row.
+
+    cols_ : array of shape (n_clusters, X.shape[1],)
+        The indicators for cluster membership of each column.
+
+
+    References
+    ----------
+
+    .. [1] Cheng, Y., & Church, G. M. (2000). Biclustering of
+           expression data. In Ismb (Vol. 8, pp. 93-103).
+
+    """
     # TODO: too similar to make_biclusters and make_msr. combine them.
     generator = check_random_state(random_state)
     n_rows, n_cols = shape

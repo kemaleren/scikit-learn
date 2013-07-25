@@ -1,3 +1,8 @@
+# encoding: utf-8
+# cython: cdivision=True
+# cython: boundscheck=False
+# cython: wraparound=False
+
 import numpy as np
 
 cimport numpy as np

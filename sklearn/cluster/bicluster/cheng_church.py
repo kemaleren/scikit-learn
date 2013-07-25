@@ -1,3 +1,4 @@
+
 """Implements the Cheng and Church biclustering algorithm.
 
 Authors : Kemal Eren
@@ -101,7 +102,7 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
                                  self.column_deletion_cutoff))
 
     def _sr_array(self, X):
-        arr = X - X.mean(axis=1)[:, np.newaxis] - X.mean(axis=0) + X.mean()
+        arr = X - X.mean(axis=1)[None].T - X.mean(axis=0) + X.mean()
         return np.power(arr, 2)
 
     def _msr(self, X):
@@ -114,7 +115,7 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
         return self._sr_array(X).mean(axis=0)
 
     def _sr_array_add(self, rows, cols, X):
-        rows = rows[:, np.newaxis]
+        rows = rows[None].T
         arr = (X - X[:, cols].mean(axis=1)[:, np.newaxis] -
                X[rows, :].mean(axis=0) + X[rows, cols].mean())
         return np.power(arr, 2)
@@ -126,8 +127,8 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
         return self._sr_array_add(rows, cols, X).mean(axis=0)
 
     def _row_msr_inverse_add(self, rows, cols, X):
-        rows = rows[:, np.newaxis]
-        arr = (-X + X[:, cols].mean(axis=1)[:, np.newaxis] -
+        rows = rows[None].T
+        arr = (-X + X[:, cols].mean(axis=1)[None].T -
                X[rows, :].mean(axis=0) + X.mean())
         return np.power(arr, 2).mean(axis=1)
 
@@ -140,8 +141,7 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
             col_id = np.argmax(col_msr)
             if row_msr[row_id] > col_msr[col_id]:
                 rows = rows.ravel()
-                rows = np.setdiff1d(rows, [rows[row_id]])
-                rows = rows[:, np.newaxis]
+                rows = np.setdiff1d(rows, [rows[row_id]])[None].T
             else:
                 cols = np.setdiff1d(cols, [cols[col_id]])
             if n_rows == len(rows) and n_cols == len(cols):
@@ -156,8 +156,7 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
                 to_remove = row_msr > (self.deletion_threshold *
                                        self._msr(X[rows, cols]))
                 rows = rows.ravel()
-                rows = np.setdiff1d(rows, rows[to_remove])
-                rows = rows[:, np.newaxis]
+                rows = np.setdiff1d(rows, rows[to_remove])[None].T
 
             col_msr = self._col_msr(X[rows, cols])
             if n_cols >= self.column_deletion_cutoff:
@@ -182,13 +181,13 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
             to_add = (self._row_msr_add(rows, cols, X) <
                       self._msr(X[rows, cols]))
             to_add = np.nonzero(to_add)[0]
-            rows = np.union1d(rows.ravel(), to_add)[:, np.newaxis]
+            rows = np.union1d(rows.ravel(), to_add)[None].T
 
             if self.inverse_rows:
                 to_add = (self._row_msr_inverse_add(old_rows, cols, X) <
                           self._msr(X[rows, cols]))
                 to_add = np.nonzero(to_add)[0]
-                rows = np.union1d(rows.ravel(), to_add)[:, np.newaxis]
+                rows = np.union1d(rows.ravel(), to_add)[None].T
 
             if n_rows == len(rows) and n_cols == len(cols):
                 break
@@ -211,7 +210,7 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
 
         for i in range(self.n_clusters):
             try:
-                rows = np.arange(n_rows)[:, np.newaxis]
+                rows = np.arange(n_rows)[None].T
                 cols = np.arange(n_cols)
                 rows, cols = self._multiple_node_deletion(rows, cols, X)
                 rows, cols = self._node_addition(rows, cols, X)

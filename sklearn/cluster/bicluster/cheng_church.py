@@ -202,7 +202,7 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
                 self._mask(X, rows, cols, generator, minval, maxval)
                 if len(rows) == 0 or len(cols) == 0:
                     break
-                results.append((rows, cols))
+                results.append((rows.ravel(), cols))
             except EmptyBiclusterException:
                 break
         if results:

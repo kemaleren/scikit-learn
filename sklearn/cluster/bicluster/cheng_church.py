@@ -54,42 +54,42 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
                              " value is {}".format(
                                  self.column_deletion_cutoff))
 
-    def _precompute(self, rows, cols, X):
-        if not (rows.size and cols.size):
-            raise EmptyBiclusterException()
-        submatrix = get_submatrix(rows, cols, X)
-        row_mean = submatrix.mean(axis=1)
-        col_mean = submatrix.mean(axis=0)
-        mean = submatrix.mean()
-        return submatrix, row_mean, col_mean, mean
-
-    def _sr_array(self, rows, cols, X):
-        submatrix, row_mean, col_mean, mean = \
-            self._precompute(rows, cols, X)
-        arr = submatrix - row_mean[:, np.newaxis] - col_mean + mean
+    def _sr_array(self, X):
+        arr = X - X.mean(axis=1)[:, np.newaxis] - X.mean(axis=0) + X.mean()
         return np.power(arr, 2)
 
-    def _msr(self, rows, cols, X):
-        return self._sr_array(rows, cols, X).mean()
+    def _msr(self, X):
+        return self._sr_array(X).mean()
 
-    def _row_msr(self, rows, cols, X):
-        return self._sr_array(rows, cols, X).mean(axis=1)
+    def _row_msr(self, X):
+        return self._sr_array(X).mean(axis=1)
 
-    def _col_msr(self, rows, cols, X):
-        return self._sr_array(rows, cols, X).mean(axis=0)
+    def _col_msr(self, X):
+        return self._sr_array(X).mean(axis=0)
 
-    def _inverse_row_msr(self, rows, cols, X):
-        submatrix, row_mean, col_mean, mean = \
-            self._precompute(rows, cols, X)
-        inverse_row_msr = \
-            -submatrix + row_mean[:, np.newaxis] - col_mean + mean
-        return  np.power(inverse_row_msr, 2).mean(axis=1)
+    def _sr_array_add(self, rows, cols, X):
+        rows = rows[:, np.newaxis]
+        arr = (X - X[:, cols].mean(axis=1)[:, np.newaxis] -
+               X[rows, :].mean(axis=0) + X.mean())
+        return np.power(arr, 2)
+
+    def _row_msr_add(self, rows, cols, X):
+        return self._sr_array_add(rows, cols, X).mean(axis=1)
+
+    def _col_msr_add(self, rows, cols, X):
+        return self._sr_array_add(rows, cols, X).mean(axis=0)
+
+    def _row_msr_inverse_add(self, rows, cols, X):
+        rows = rows[:, np.newaxis]
+        arr = (-X + X[:, cols].mean(axis=1)[:, np.newaxis] -
+               X[rows, :].mean(axis=0) + X.mean())
+        return np.power(arr, 2).mean(axis=1)
 
     def _node_deletion(self, rows, cols, X):
-        while self._msr(rows, cols, X) > self.max_msr:
+        while self._msr(get_submatrix(rows, cols, X)) > self.max_msr:
             n_rows, n_cols = len(rows), len(cols)
-            row_msr = self._row_msr(rows, cols, X)
-            col_msr = self._col_msr(rows, cols, X)
+            row_msr = self._row_msr(get_submatrix(rows, cols, X))
+            col_msr = self._col_msr(get_submatrix(rows, cols, X))
             row_id = np.argmax(row_msr)
             col_id = np.argmax(col_msr)
             if row_msr[row_id] > col_msr[col_id]:
@@ -101,18 +101,18 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
         return rows, cols
 
     def _multiple_node_deletion(self, rows, cols, X):
-        while self._msr(rows, cols, X) > self.max_msr:
+        while self._msr(get_submatrix(rows, cols, X)) > self.max_msr:
             n_rows, n_cols = len(rows), len(cols)
-            row_msr = self._row_msr(rows, cols, X)
+            row_msr = self._row_msr(get_submatrix(rows, cols, X))
             if n_rows >= self.row_deletion_cutoff:
                 to_remove = row_msr > (self.deletion_threshold *
-                                       self._msr(rows, cols, X))
+                                       self._msr(get_submatrix(rows, cols, X)))
                 rows = np.setdiff1d(rows, rows[to_remove])
 
-            col_msr = self._col_msr(rows, cols, X)
+            col_msr = self._col_msr(get_submatrix(rows, cols, X))
             if n_cols >= self.column_deletion_cutoff:
                 to_remove = col_msr > (self.deletion_threshold *
-                                       self._msr(rows, cols, X))
+                                       self._msr(get_submatrix(rows, cols, X)))
                 rows = np.setdiff1d(cols, cols[to_remove])
 
             if n_rows == len(rows) and n_cols == len(cols):
@@ -121,24 +121,23 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
         return rows, cols
 
     def _node_addition(self, rows, cols, X):
-        n_total_rows, n_total_cols = X.shape
-        all_rows = np.arange(n_total_rows)
-        all_cols = np.arange(n_total_cols)
-        while self._msr(rows, cols, X) > self.max_msr:
+        while True:
             n_rows, n_cols = len(rows), len(cols)
-            col_msr = self._col_msr(rows, all_cols, X)
-            to_add = np.nonzero(col_msr < self._msr(rows, cols, X))[0]
+            to_add = (self._col_msr_add(rows, cols, X) <
+                      self._msr(get_submatrix(rows, cols, X)))[0]
+            to_add = np.nonzero(to_add)[0]
             cols = np.union1d(cols, to_add)
 
-            _, row_msr, _ = self._compute_msr(all_rows, cols, X)
-            to_add = np.nonzero(row_msr < self._msr(rows, cols, X))[0]
+            old_rows = rows.copy()
+            to_add = (self._row_msr_add(rows, cols, X) <
+                      self._msr(get_submatrix(rows, cols, X)))
+            to_add = np.nonzero(to_add)[0]
             rows = np.union1d(rows, to_add)
 
             if self.inverse_rows:
-                inverse_row_msr = self._inverse_row_msr(
-                    all_rows, cols, X)
-                to_add = np.nonzero(inverse_row_msr <
-                                    self._msr(rows, cols, X))[0]
+                to_add = (self._row_msr_inverse_add(old_rows, cols, X) <
+                          self._msr(get_submatrix(old_rows, cols, X)))
+                to_add = np.nonzero(to_add)[0]
                 rows = np.union1d(rows, to_add)
 
             if n_rows == len(rows) and n_cols == len(cols):

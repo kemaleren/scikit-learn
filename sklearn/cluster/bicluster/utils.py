@@ -33,6 +33,8 @@ def get_shape(rows, columns):
 def get_submatrix(rows, columns, data):
     """Returns the submatrix corresponding to bicluster `i`.
 
+    ``rows`` and ``columns`` must be indicator vectors.
+
     Works with sparse matrices.
 
     """

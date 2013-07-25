@@ -15,7 +15,6 @@ from sklearn.utils.validation import check_arrays
 from sklearn.utils.validation import check_random_state
 
 from .utils import check_array_ndim
-from .utils import get_submatrix
 from .utils import get_indicators
 
 
@@ -86,14 +85,16 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
         return np.power(arr, 2).mean(axis=1)
 
     def _node_deletion(self, rows, cols, X):
-        while self._msr(get_submatrix(rows, cols, X)) > self.max_msr:
+        while self._msr(X[rows, cols]) > self.max_msr:
             n_rows, n_cols = len(rows), len(cols)
-            row_msr = self._row_msr(get_submatrix(rows, cols, X))
-            col_msr = self._col_msr(get_submatrix(rows, cols, X))
+            row_msr = self._row_msr(X[rows, cols])
+            col_msr = self._col_msr(X[rows, cols])
             row_id = np.argmax(row_msr)
             col_id = np.argmax(col_msr)
             if row_msr[row_id] > col_msr[col_id]:
+                rows = rows.ravel()
                 rows = np.setdiff1d(rows, [rows[row_id]])
+                rows = rows[:, np.newaxis]
             else:
                 cols = np.setdiff1d(cols, [cols[col_id]])
             if n_rows == len(rows) and n_cols == len(cols):
@@ -101,18 +102,20 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
         return rows, cols
 
     def _multiple_node_deletion(self, rows, cols, X):
-        while self._msr(get_submatrix(rows, cols, X)) > self.max_msr:
+        while self._msr(X[rows, cols]) > self.max_msr:
             n_rows, n_cols = len(rows), len(cols)
-            row_msr = self._row_msr(get_submatrix(rows, cols, X))
+            row_msr = self._row_msr(X[rows, cols])
             if n_rows >= self.row_deletion_cutoff:
                 to_remove = row_msr > (self.deletion_threshold *
-                                       self._msr(get_submatrix(rows, cols, X)))
+                                       self._msr(X[rows, cols]))
+                rows = rows.ravel()
                 rows = np.setdiff1d(rows, rows[to_remove])
+                rows = rows[:, np.newaxis]
 
-            col_msr = self._col_msr(get_submatrix(rows, cols, X))
+            col_msr = self._col_msr(X[rows, cols])
             if n_cols >= self.column_deletion_cutoff:
                 to_remove = col_msr > (self.deletion_threshold *
-                                       self._msr(get_submatrix(rows, cols, X)))
+                                       self._msr(X[rows, cols]))
                 rows = np.setdiff1d(cols, cols[to_remove])
 
             if n_rows == len(rows) and n_cols == len(cols):
@@ -124,21 +127,21 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
         while True:
             n_rows, n_cols = len(rows), len(cols)
             to_add = (self._col_msr_add(rows, cols, X) <
-                      self._msr(get_submatrix(rows, cols, X)))[0]
+                      self._msr(X[rows, cols]))[0]
             to_add = np.nonzero(to_add)[0]
             cols = np.union1d(cols, to_add)
 
             old_rows = rows.copy()
             to_add = (self._row_msr_add(rows, cols, X) <
-                      self._msr(get_submatrix(rows, cols, X)))
+                      self._msr(X[rows, cols]))
             to_add = np.nonzero(to_add)[0]
-            rows = np.union1d(rows, to_add)
+            rows = np.union1d(rows.ravel(), to_add)[:, np.newaxis]
 
             if self.inverse_rows:
                 to_add = (self._row_msr_inverse_add(old_rows, cols, X) <
                           self._msr(get_submatrix(old_rows, cols, X)))
                 to_add = np.nonzero(to_add)[0]
-                rows = np.union1d(rows, to_add)
+                rows = np.union1d(rows.ravel(), to_add)[:, np.newaxis]
 
             if n_rows == len(rows) and n_cols == len(cols):
                 break
@@ -146,7 +149,7 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
 
     def _mask(self, X, rows, cols, generator, minval, maxval):
         mask_vals = generator.uniform(minval, maxval, (len(rows), len(cols)))
-        X[rows[:, np.newaxis], cols] = mask_vals
+        X[rows, cols] = mask_vals
 
     def fit(self, X):
         X = X.copy()  # need to modify it in-place
@@ -161,7 +164,8 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
 
         for i in range(self.n_clusters):
             try:
-                rows, cols = np.arange(n_rows), np.arange(n_cols)
+                rows = np.arange(n_rows)[:, np.newaxis]
+                cols = np.arange(n_cols)
                 rows, cols = self._multiple_node_deletion(rows, cols, X)
                 rows, cols = self._node_addition(rows, cols, X)
                 self._mask(X, rows, cols, generator, minval, maxval)

@@ -24,7 +24,54 @@ class EmptyBiclusterException(Exception):
 
 class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
                                      BiclusterMixin)):
-    def __init__(self, n_clusters=3, max_msr=1, deletion_threshold=1,
+    """Algorithm to find biclusters with low mean squared residues.
+
+    Parameters
+    -----------
+    n_clusters : integer, optional, default: 100
+        The number of biclusters to find.
+
+    max_msr : float, default: 1.0
+        Maximum MSR of a bicluster. Equivalent to :math:`delta` in
+        original paper.
+
+    deletion_threshold : float, optional, default: 1.5
+        Multiplier for multiple node deletion. Equivalent to
+        :math:`\alpha` in original paper.
+
+    row_deletion_cutoff : integer, optional, default: 100
+        Number of rows at which to switch to single node deletion.
+
+    column_deletion_cutoff : integer, optional, default: 100
+        Number of columns at which to switch to single node deletion.
+
+    inverse_rows : bool, optional, default: True
+        Whether to add rows with inverse patterns during node addition.
+
+    random_state : int seed, RandomState instance, or None (default)
+        A pseudo random number generator used by the K-Means
+        initialization.
+
+    Attributes
+    ----------
+    `rows_` : array-like, shape (n_row_clusters, n_rows)
+        Results of the clustering. `rows[i, r]` is True if cluster `i`
+        contains row `r`. Available only after calling ``fit()``.
+
+    `columns_` : array-like, shape (n_column_clusters, n_columns)
+        Results of the clustering, like `rows`.
+
+
+    References
+    ----------
+
+    - Cheng, Y., & Church, G. M. (2000). `Biclustering of
+      expression data
+      <ftp://samba.ad.sdsc.edu/pub/sdsc/biology/ISMB00/157.pdf>`__.
+      In Ismb (Vol. 8, pp. 93-103).
+
+    """
+    def __init__(self, n_clusters=100, max_msr=1.0, deletion_threshold=1.5,
                  row_deletion_cutoff=100, column_deletion_cutoff=100,
                  inverse_rows=True, random_state=None):
         self.n_clusters = n_clusters

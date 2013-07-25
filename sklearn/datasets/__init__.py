@@ -43,6 +43,7 @@ from .samples_generator import make_sparse_spd_matrix
 from .samples_generator import make_gaussian_quantiles
 from .samples_generator import make_biclusters
 from .samples_generator import make_checkerboard
+from .samples_generator import make_msr
 from .svmlight_format import load_svmlight_file
 from .svmlight_format import load_svmlight_files
 from .svmlight_format import dump_svmlight_file
@@ -96,7 +97,10 @@ __all__ = ['clear_data_home',
            'make_spd_matrix',
            'make_swiss_roll',
            'mldata_filename',
-           'samples_generator']
+           'samples_generator',
+           'make_biclusters',
+           'make_checkerboard',
+           'make_msr']
 
 
 # backward compatibility

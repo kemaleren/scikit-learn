@@ -70,7 +70,7 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
     def _sr_array_add(self, rows, cols, X):
         rows = rows[:, np.newaxis]
         arr = (X - X[:, cols].mean(axis=1)[:, np.newaxis] -
-               X[rows, :].mean(axis=0) + X.mean())
+               X[rows, :].mean(axis=0) + X[rows, cols].mean())
         return np.power(arr, 2)
 
     def _row_msr_add(self, rows, cols, X):

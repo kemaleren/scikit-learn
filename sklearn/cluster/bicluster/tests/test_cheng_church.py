@@ -1,19 +1,30 @@
 """Testing for Spectral Biclustering methods"""
 
 import numpy as np
-from sklearn.utils.testing import assert_array_equal
+from sklearn.utils.testing import assert_equal
 from sklearn.cluster.bicluster import ChengChurch
+from sklearn.metrics import consensus_score
 
 
 def test_cheng_church():
     """Test Cheng and Church algorithm on a simple problem."""
     generator = np.random.RandomState(0)
-    data = generator.normal(0, 5, (50, 50))
-    data[:10, :10] = 10
-    model = ChengChurch(n_clusters=1, max_msr=10)
+    data = generator.uniform(0, 100, (30, 30))
+    data[:10, :10] = 20
+    data[10:20, 10:20] = 50
+    data[20:30, 20:300] = 80
+    model = ChengChurch(n_clusters=3, max_msr=10)
     model.fit(data)
 
-    assert_array_equal(np.nonzero(model.rows_[0])[0],
-                       np.arange(10))
-    assert_array_equal(np.nonzero(model.columns_[0])[0],
-                       np.arange(10))
+    rows = np.zeros((3, 30), dtype=np.bool)
+    cols = np.zeros((3, 30), dtype=np.bool)
+
+    rows[0, 0:10] = True
+    rows[1, 10:20] = True
+    rows[2, 20:30] = True
+
+    cols[0, 0:10] = True
+    cols[1, 10:20] = True
+    cols[2, 20:30] = True
+
+    assert_equal(consensus_score((rows, cols), model.biclusters_), 1.0)

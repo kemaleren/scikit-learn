@@ -63,20 +63,20 @@ class ChengChurch(six.with_metaclass(ABCMeta, BaseEstimator,
         mean = submatrix.mean()
         return submatrix, row_mean, col_mean, mean
 
-    def _msr_array(self, rows, cols, X):
+    def _sr_array(self, rows, cols, X):
         submatrix, row_mean, col_mean, mean = \
             self._precompute(rows, cols, X)
         arr = submatrix - row_mean[:, np.newaxis] - col_mean + mean
         return np.power(arr, 2)
 
     def _msr(self, rows, cols, X):
-        return self._msr_array(rows, cols, X).mean()
+        return self._sr_array(rows, cols, X).mean()
 
     def _row_msr(self, rows, cols, X):
-        return self._msr_array(rows, cols, X).mean(axis=1)
+        return self._sr_array(rows, cols, X).mean(axis=1)
 
     def _col_msr(self, rows, cols, X):
-        return self._msr_array(rows, cols, X).mean(axis=0)
+        return self._sr_array(rows, cols, X).mean(axis=0)
 
     def _inverse_row_msr(self, rows, cols, X):
         submatrix, row_mean, col_mean, mean = \

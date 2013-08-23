@@ -13,6 +13,7 @@ from sklearn.base import BaseEstimator, BiclusterMixin
 from sklearn.externals import six
 
 from .utils import get_indicators
+from ._biclique import find_pivot
 
 
 def _precompute_neighbors(X):
@@ -40,19 +41,6 @@ def _precompute_neighbors(X):
     return all_neighbors
 
 
-def _find_pivot(nodes, degrees, lim):
-    pivot = -1
-    pivot_degree = -1
-    for n in nodes:
-        degree = degrees[n]
-        if degree > pivot_degree:
-            pivot = n
-            pivot_degree = degree
-        if degree == lim:
-            break
-    return pivot, pivot_degree
-
-
 def _find_bicliques(X):
     """Find all bicliques in a bipartite graph formed from array X.
 
@@ -65,8 +53,10 @@ def _find_bicliques(X):
 
     """
     neighbors = _precompute_neighbors(X)
-    degrees = {n: len(nbrs) for n, nbrs in neighbors.iteritems()}
-    pivot = max(degrees, key=degrees.get)
+    degrees = np.zeros(len(neighbors), dtype=np.int)
+    for n in neighbors:
+        degrees[n] = len(neighbors[n])
+    pivot = np.argmax(degrees)
 
     candidates = set(neighbors)
     small_candidates = set(candidates - neighbors[pivot])
@@ -103,14 +93,14 @@ def _find_bicliques(X):
             continue
 
         n_new_candidates = len(new_candidates)
-        pivot_done, degree_done = _find_pivot(new_done, degrees,
-                                              n_new_candidates)
+        pivot_done, degree_done = find_pivot(new_done, degrees,
+                                             n_new_candidates)
         if degree_done == n_new_candidates:
             # shortcut: this part of tree already searched
             biclique_so_far.pop()
             continue
-        pivot_cand, degree_cand = _find_pivot(new_candidates, degrees,
-                                              n_new_candidates - 1)
+        pivot_cand, degree_cand = find_pivot(new_candidates, degrees,
+                                             n_new_candidates - 1)
         if degree_cand > degree_done:
             pivot = pivot_cand
         else:

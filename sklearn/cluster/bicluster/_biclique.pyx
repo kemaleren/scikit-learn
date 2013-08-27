@@ -11,24 +11,6 @@ np.import_array()
 
 from libc.stdlib cimport malloc, free
 
-cdef class Node:
-    cdef Node prev
-    cdef Node next
-    cdef long value
-
-    def __cinit__(self):
-        self.prev = None
-        self.next = None
-        self.value = -1
-
-    def __repr__(self):
-        entries = []
-        cdef Node n = self.next
-        while n.value != -1:
-            entries.append('Node({})'.format(n.value))
-            n = n.next
-        return " <-> ".join(entries)
-
 
 cdef class HashSet:
     cdef long[:] data  # holds elements
@@ -42,45 +24,39 @@ cdef class HashSet:
     cdef long empty
     cdef long removed
 
-    cdef Node nodes
-    cdef Node iter_node
+    cdef long iter_posn
 
     def __cinit__(self):
-        self.min_bits = 5
+        self.min_bits = 3
         self.bits = self.min_bits
         self.capacity = 2 ** self.bits
         self.upper = 0.7
         self.lower = 0.1
         self.empty = (2 ** 32) - 1
         self.removed = (2 ** 32) - 2
-
+        self.iter_posn = 0
         self.cardinality = 0
-
         self.data = np.empty(self.capacity, dtype=np.int)
         self.data[:] = self.empty
-
-        self._init_nodes()
-
-    def _init_nodes(self):
-        cdef Node begin = Node()
-        cdef Node end = Node()
-        begin.next = end
-        end.prev = begin
-        self.nodes = begin
-        self.iter_node = self.nodes
 
     def __len__(self):
         return self.cardinality
 
     def __iter__(self):
-        self.iter_node = self.nodes.next
+        self.iter_posn = 0
         return self
 
     def __next__(self):
-        cdef long val = self.iter_node.value
-        if val == -1:
+        if self.iter_posn >= self.capacity:
             raise StopIteration
-        self.iter_node = self.iter_node.next
+        cdef long val = self.data[self.iter_posn]
+        while val == self.empty or \
+              val == self.removed:
+            self.iter_posn += 1
+            if self.iter_posn >= self.capacity:
+                raise StopIteration
+            val = self.data[self.iter_posn]
+        self.iter_posn += 1
         return val
 
     def __bool__(self):
@@ -100,25 +76,6 @@ cdef class HashSet:
             entry = self.data[posn]
         return posn
 
-    def add_node(self, value):
-        cdef Node n = Node()
-        n.value = value
-        n.prev = self.nodes
-        n.next = self.nodes.next
-        self.nodes.next.prev = n
-        self.nodes.next = n
-
-    def remove_node(self, long value):
-        cdef Node n = self.nodes.next
-        while n.value != -1:
-            if n.value == value:
-                break
-            n = n.next
-        if n.value == -1:
-            raise Exception()
-        n.prev.next = n.next
-        n.next.prev = n.prev
-
     def add(self, long value, bint resize=1):
         cdef long posn = self._find_posn(value)
         if (self.data[posn] != self.empty) and (self.data[posn] != self.removed) and (self.data[posn] != value):
@@ -126,7 +83,6 @@ cdef class HashSet:
         if self.data[posn] != value:
             self.data[posn] = value
             self.cardinality += 1
-            self.add_node(value)
             if resize:
                 self._resize()
 
@@ -140,13 +96,15 @@ cdef class HashSet:
         if self.data[posn] == value:
             self.data[posn] = self.removed
             self.cardinality -= 1
-            self.remove_node(value)
             self._resize()
 
     def pop(self):
         if not self:
             raise IndexError('pop from empty set')
-        cdef long value = self.nodes.next.value
+        cdef long value
+        for value in self.data:
+            if value != self.empty and value != self.removed:
+                break
         self.remove(value)
         return value
 
@@ -177,12 +135,11 @@ cdef class HashSet:
         self.data = np.empty(self.capacity, dtype=np.int)
         self.data[:] = self.empty
 
-        cdef Node n = self.nodes.next
-        self._init_nodes()
         self.cardinality = 0
-        while n.value != -1:
-            self.add(n.value, 0)
-            n = n.next
+        cdef long old_val
+        for val in old_data:
+            if val != self.empty and val != self.removed:
+                self.add(val, 0)
 
     def intersection(self, HashSet other):
         cdef long val

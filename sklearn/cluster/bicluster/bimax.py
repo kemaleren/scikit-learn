@@ -12,7 +12,6 @@ from sklearn.base import BaseEstimator, BiclusterMixin
 from sklearn.externals import six
 
 from .utils import get_indicators
-from ._bimax import get_cols_u, do_reduce
 
 
 class BiMax(six.with_metaclass(ABCMeta, BaseEstimator,
@@ -25,37 +24,56 @@ class BiMax(six.with_metaclass(ABCMeta, BaseEstimator,
     def _conquer(self, data, rows, cols, col_sets):
         if np.all(data[np.array(list(rows))[:, np.newaxis], list(cols)]):
             return [(rows, cols)]
-        rows_u, rows_v, rows_w, cols_u, cols_v = \
+        rows_all, rows_none, rows_some, cols_all, cols_none = \
             self._divide(data, rows, cols, col_sets)
-        results_u = []
-        results_v = []
-        if rows_u:
-            results_u = self._conquer(data, rows_u.union(rows_v),
-                                      cols_u, col_sets)
-        if rows_v and rows_w:
-            results_v = self._conquer(data, rows_v, cols_v, col_sets)
-        elif rows_w:
+        results_all = []
+        results_none = []
+        if rows_all:
+            results_all = self._conquer(data, rows_all.union(rows_some),
+                                        cols_all, col_sets)
+        if rows_none and not rows_some:
+            results_none = self._conquer(data, rows_none, cols_none, col_sets)
+        elif rows_some:
             new_col_sets = col_sets[:]
-            new_col_sets.append(cols_v)
-            results_v = self._conquer(data, rows_w.union(rows_v),
-                                      cols_u.union(cols_v), new_col_sets)
-        return results_u + results_v
+            new_col_sets.append(cols_none)
+            results_none = self._conquer(data,
+                                         rows_some.union(rows_none),
+                                         cols_all.union(cols_none),
+                                         new_col_sets)
+        return results_all + results_none
 
     def _divide(self, data, rows, cols, col_sets):
-        new_rows, incl_cols = do_reduce(data, rows, cols, col_sets)
-        cols_u = get_cols_u(data, new_rows, cols)
-        cols_v = cols.difference(cols_u)
-        rows_u = set()
-        rows_v = set()
-        rows_w = set()
+        new_rows, nz_cols = self._reduce(data, rows, cols, col_sets)
+        n_cols = len(cols)
+        cols_all = cols
         for r in new_rows:
-            if incl_cols[r].issubset(cols_u):
-                rows_u.add(r)
-            elif incl_cols[r].issubset(cols_v):
-                rows_v.add(r)
+            if 0 < len(nz_cols[r]) < n_cols:
+                cols_all = nz_cols[r]
+                break
+        cols_none = cols.difference(cols_all)
+        rows_all = set()
+        rows_none = set()
+        rows_some = set()
+        for r in new_rows:
+            if nz_cols[r].issubset(cols_all):
+                rows_all.add(r)
+            elif nz_cols[r].issubset(cols_none):
+                rows_none.add(r)
             else:
-                rows_w.add(r)
-        return rows_u, rows_v, rows_w, cols_u, cols_v
+                rows_some.add(r)
+        return rows_all, rows_none, rows_some, cols_all, cols_none
+
+    def _reduce(self, data, rows, cols, col_sets):
+        row_idxs = np.array(list(rows))
+        col_idxs = np.array(list(cols))
+        subarray = data[row_idxs[:, np.newaxis], col_idxs]
+        nz_cols = {row_idxs[r]: set(col_idxs[np.nonzero(subarray[r])[0]])
+                   for r in range(row_idxs.shape[0])}
+        new_rows = set(r for r in row_idxs
+                       if nz_cols[r] and
+                       all(nz_cols[r].intersection(cset)
+                           for cset in col_sets))
+        return new_rows, nz_cols
 
     def fit(self, X):
         """Creates a biclustering for X.

@@ -41,9 +41,11 @@ class BiMax(six.with_metaclass(ABCMeta, BaseEstimator,
         return results_u + results_v
 
     def _divide(self, data, rows, cols, col_sets):
-        new_rows = self._reduce(data, rows, cols, col_sets)
+        new_rows, incl_cols = self._reduce(data, rows, cols, col_sets)
+        col_idxs = np.array(list(cols))
+        n_cols = len(cols)
         row_cands = list(r for r in new_rows
-                         if 0 < data[r, list(cols)].sum() < len(cols))
+                         if 0 < data[r, col_idxs].sum() < n_cols)
         try:
             r = row_cands[0]
             cols_u = set(c for c in cols if data[r, c])
@@ -54,23 +56,21 @@ class BiMax(six.with_metaclass(ABCMeta, BaseEstimator,
         rows_v = set()
         rows_w = set()
         for r in new_rows:
-            incl_cols = set(c for c in cols if data[r, c])
-            if incl_cols.issubset(cols_u):
+            if incl_cols[r].issubset(cols_u):
                 rows_u.add(r)
-            elif incl_cols.issubset(cols_v):
+            elif incl_cols[r].issubset(cols_v):
                 rows_v.add(r)
             else:
                 rows_w.add(r)
         return rows_u, rows_v, rows_w, cols_u, cols_v
 
     def _reduce(self, data, rows, cols, col_sets):
-        result = set()
-        for r in rows:
-            incl_cols = set(c for c in cols if data[r, c])
-            if incl_cols and all(cset.intersection(incl_cols)
-                                 for cset in col_sets):
-                result.add(r)
-        return result
+        incl_cols = {r: set(c for c in cols if data[r, c])
+                     for r in rows}
+        new_rows = set(r for r in rows if incl_cols[r] and
+                       all(cset.intersection(incl_cols[r])
+                           for cset in col_sets))
+        return new_rows, incl_cols
 
     def fit(self, X):
         """Creates a biclustering for X.

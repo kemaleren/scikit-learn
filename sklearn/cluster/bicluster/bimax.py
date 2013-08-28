@@ -65,8 +65,11 @@ class BiMax(six.with_metaclass(ABCMeta, BaseEstimator,
         return rows_u, rows_v, rows_w, cols_u, cols_v
 
     def _reduce(self, data, rows, cols, col_sets):
-        incl_cols = {r: set(c for c in cols if data[r, c])
-                     for r in rows}
+        row_idxs = np.array(list(rows))
+        col_idxs = np.array(list(cols))
+        subarray = data[row_idxs[:, np.newaxis], col_idxs]
+        nz = map(np.nonzero, subarray)
+        incl_cols = {r: set(col_idxs[cs[0]]) for r, cs in zip(row_idxs, nz)}
         new_rows = set(r for r in rows if incl_cols[r] and
                        all(cset.intersection(incl_cols[r])
                            for cset in col_sets))

@@ -19,8 +19,8 @@ def get_indicators(rows, columns, shape):
     """Convert indices to indicator vectors"""
     row_ind = np.zeros(shape[0], dtype=np.bool)
     col_ind = np.zeros(shape[1], dtype=np.bool)
-    row_ind[rows] = True
-    col_ind[columns] = True
+    row_ind[list(rows)] = True
+    col_ind[list(columns)] = True
     return row_ind, col_ind
 
 

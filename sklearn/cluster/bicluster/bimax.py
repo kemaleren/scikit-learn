@@ -12,6 +12,7 @@ from sklearn.base import BaseEstimator, BiclusterMixin
 from sklearn.externals import six
 
 from .utils import get_indicators
+from ._bimax import get_cols_u, do_reduce
 
 
 class BiMax(six.with_metaclass(ABCMeta, BaseEstimator,
@@ -41,16 +42,8 @@ class BiMax(six.with_metaclass(ABCMeta, BaseEstimator,
         return results_u + results_v
 
     def _divide(self, data, rows, cols, col_sets):
-        new_rows, incl_cols = self._reduce(data, rows, cols, col_sets)
-        col_idxs = np.array(list(cols))
-        n_cols = len(cols)
-        row_cands = list(r for r in new_rows
-                         if 0 < data[r, col_idxs].sum() < n_cols)
-        try:
-            r = row_cands[0]
-            cols_u = set(c for c in cols if data[r, c])
-        except IndexError:
-            cols_u = cols
+        new_rows, incl_cols = do_reduce(data, rows, cols, col_sets)
+        cols_u = get_cols_u(data, new_rows, cols)
         cols_v = cols.difference(cols_u)
         rows_u = set()
         rows_v = set()
@@ -63,17 +56,6 @@ class BiMax(six.with_metaclass(ABCMeta, BaseEstimator,
             else:
                 rows_w.add(r)
         return rows_u, rows_v, rows_w, cols_u, cols_v
-
-    def _reduce(self, data, rows, cols, col_sets):
-        row_idxs = np.array(list(rows))
-        col_idxs = np.array(list(cols))
-        subarray = data[row_idxs[:, np.newaxis], col_idxs]
-        nz = map(np.nonzero, subarray)
-        incl_cols = {r: set(col_idxs[cs[0]]) for r, cs in zip(row_idxs, nz)}
-        new_rows = set(r for r in rows if incl_cols[r] and
-                       all(cset.intersection(incl_cols[r])
-                           for cset in col_sets))
-        return new_rows, incl_cols
 
     def fit(self, X):
         """Creates a biclustering for X.

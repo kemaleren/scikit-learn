@@ -4,22 +4,42 @@ Authors : Kemal Eren
 License: BSD 3 clause
 
 """
-from abc import ABCMeta
-
 import numpy as np
 
-from sklearn.base import BaseEstimator, BiclusterMixin
-from sklearn.externals import six
 
-from .utils import get_indicators
+class BiMax():
+    """Method to find all maximal biclusters in a boolean array.
 
+    Attributes
+    ----------
+    `rows_` : array-like, shape (n_row_clusters, n_rows)
+        Results of the clustering. `rows[i, r]` is True if cluster `i`
+        contains row `r`. Available only after calling ``fit``.
 
-class BiMax(six.with_metaclass(ABCMeta, BaseEstimator,
-                               BiclusterMixin)):
-    """Method to find all maximal biclusters in a boolean array."""
+    `columns_` : array-like, shape (n_column_clusters, n_columns)
+        Results of the clustering, like `rows`.
 
-    def __init__(self):
-        pass
+    """
+
+    def fit(self, X):
+        """Creates a biclustering for X.
+
+        Parameters
+        ----------
+        X : array-like, shape (n_samples, n_features)
+
+        """
+        n_rows, n_cols = X.shape
+        result = self._conquer(X, set(range(n_rows)),
+                               set(range(n_cols)), [])
+        row_ind = []
+        col_ind = []
+        for rows, cols in result:
+            ri, ci = self._get_indicators(rows, cols, X.shape)
+            row_ind.append(ri)
+            col_ind.append(ci)
+        self.rows_ = np.vstack(row_ind)
+        self.columns_ = np.vstack(col_ind)
 
     def _conquer(self, data, rows, cols, col_sets):
         if np.all(data[np.array(list(rows))[:, np.newaxis], list(cols)]):
@@ -75,22 +95,10 @@ class BiMax(six.with_metaclass(ABCMeta, BaseEstimator,
                            for cset in col_sets))
         return new_rows, nz_cols
 
-    def fit(self, X):
-        """Creates a biclustering for X.
-
-        Parameters
-        ----------
-        X : array-like, shape (n_samples, n_features)
-
-        """
-        n_rows, n_cols = X.shape
-        result = self._conquer(X, set(range(n_rows)),
-                               set(range(n_cols)), [])
-        row_ind = []
-        col_ind = []
-        for rows, cols in result:
-            ri, ci = get_indicators(rows, cols, X.shape)
-            row_ind.append(ri)
-            col_ind.append(ci)
-        self.rows_ = np.vstack(row_ind)
-        self.columns_ = np.vstack(col_ind)
+    def _get_indicators(self, rows, columns, shape):
+        """Convert indices to indicator vectors"""
+        row_ind = np.zeros(shape[0], dtype=np.bool)
+        col_ind = np.zeros(shape[1], dtype=np.bool)
+        row_ind[list(rows)] = True
+        col_ind[list(columns)] = True
+        return row_ind, col_ind

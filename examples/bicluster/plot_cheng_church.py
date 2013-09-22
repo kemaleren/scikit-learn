@@ -19,6 +19,7 @@ print(__doc__)
 # License: BSD 3 clause
 
 from matplotlib import pyplot as plt
+import numpy as np
 
 from sklearn.datasets import make_msr_biclusters
 from sklearn.datasets import samples_generator as sg
@@ -30,14 +31,30 @@ data, rows, columns = make_msr_biclusters(shape=(100, 100),
                                           shuffle=False,
                                           random_state=0)
 
+data, row_idx, col_idx = sg._shuffle(data, random_state=0)
+
+# Fit the biclustering model
+model = ChengChurch(n_clusters=3, max_msr=100, random_state=0)
+model.fit(data)
+score = consensus_score(model.biclusters_,
+                        (rows[:, row_idx], columns[:, col_idx]))
+
+print "consensus score: {:.1f}".format(score)
+
+# Plot the affinity matrix
+
 plt.matshow(data, cmap=plt.cm.Blues)
 plt.title("Original dataset")
-
-data, row_idx, col_idx = sg._shuffle(data, random_state=0)
 
 plt.matshow(data, cmap=plt.cm.Blues)
 plt.title("Shuffled dataset")
 
+row_order = np.argsort(np.argmax(model.rows_, axis=0), kind='mergesort')
+column_order = np.argsort(np.argmax(model.columns_, axis=0), kind='mergesort')
+plt.matshow(data[row_order].T[column_order].T[:300], cmap=plt.cm.Blues)
+plt.title("Reordered dataset using biclustering")
+
+# Plot profiles
 plt.figure()
 n_cols = data.shape[1]
 for row in data:
@@ -45,13 +62,6 @@ for row in data:
 plt.title('Parallel coordinates of shuffled data')
 plt.xlabel('column numbers')
 plt.ylabel('value')
-
-model = ChengChurch(n_clusters=3, max_msr=100, random_state=0)
-model.fit(data)
-score = consensus_score(model.biclusters_,
-                        (rows[:, row_idx], columns[:, col_idx]))
-
-print "consensus score: {:.1f}".format(score)
 
 
 plt.figure()
